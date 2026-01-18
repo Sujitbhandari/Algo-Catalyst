@@ -1,0 +1,40 @@
+# Build directories
+build/
+cmake-build-*/
+*.o
+*.a
+*.so
+*.dylib
+
+# Executables
+AlgoCatalyst
+AlgoCatalyst.exe
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# macOS
+.DS_Store
+
+# Python virtual environment
+venv/
+env/
+*.pyc
+__pycache__/
+
+# Generated plots (keep docs/images in repo)
+performance_plot.png
+
+# Logs
+*.log
+
