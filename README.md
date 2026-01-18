@@ -163,8 +163,4 @@ The script generates two plots:
 
 The plot is saved as performance_plot.png and displayed interactively.
 
-Example visualization:
-
-![Performance Plot](docs/images/performance_plot.png)
-
 
