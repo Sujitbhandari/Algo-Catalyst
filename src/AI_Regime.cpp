@@ -65,18 +65,24 @@ RegimeClassifier::Regime RegimeClassifier::updateAndClassify(const Tick& tick) {
         }
     }
     
-    // Map cluster to regime
-    // Assume cluster 0 is CHOPPY, cluster 1 is TRENDING
-    // Higher volatility and direction -> TRENDING
-    if (nearest_cluster == 0) {
-        // Check if it's actually trending based on feature values
-        if (current_feature.volatility > 0.02 && current_feature.direction > 0.01) {
+    // Map cluster to regime based on feature characteristics
+    // High volatility + strong direction => TRENDING
+    // High volatility + weak direction  => VOLATILE
+    // Low volatility                    => CHOPPY
+    const double vol_threshold = 0.015;
+    const double dir_threshold = 0.008;
+
+    if (current_feature.volatility > vol_threshold * 1.5) {
+        if (current_feature.direction > dir_threshold) {
             current_regime_ = Regime::TRENDING;
         } else {
-            current_regime_ = Regime::CHOPPY;
+            current_regime_ = Regime::VOLATILE;
         }
-    } else {
+    } else if (current_feature.volatility > vol_threshold &&
+               current_feature.direction > dir_threshold) {
         current_regime_ = Regime::TRENDING;
+    } else {
+        current_regime_ = Regime::CHOPPY;
     }
     
     return current_regime_;
@@ -85,9 +91,11 @@ RegimeClassifier::Regime RegimeClassifier::updateAndClassify(const Tick& tick) {
 double RegimeClassifier::getPositionMultiplier() const {
     switch (current_regime_) {
         case Regime::CHOPPY:
-            return 0.0;  // Disable trading
+            return 0.0;   // Disable momentum trading in choppy market
         case Regime::TRENDING:
-            return 1.5;  // Increase position size by 50%
+            return 1.5;   // Full size + 50% boost in trending market
+        case Regime::VOLATILE:
+            return 0.5;   // Half size in volatile / directionless market
         default:
             return 1.0;
     }

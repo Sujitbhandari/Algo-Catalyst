@@ -11,11 +11,22 @@ namespace AlgoCatalyst {
 class RegimeClassifier {
 public:
     enum class Regime {
-        CHOPPY = 0,   // Low volatility, mean-reverting
-        TRENDING = 1  // High directed volatility
+        CHOPPY   = 0,  // Low volatility, mean-reverting
+        TRENDING = 1,  // High directed volatility with clear momentum
+        VOLATILE = 2   // High volatility without clear direction (avoid trading)
     };
+
+    // Convert regime to human-readable string
+    static const char* regimeToString(Regime r) {
+        switch (r) {
+            case Regime::CHOPPY:   return "CHOPPY";
+            case Regime::TRENDING: return "TRENDING";
+            case Regime::VOLATILE: return "VOLATILE";
+            default:               return "UNKNOWN";
+        }
+    }
     
-    RegimeClassifier(std::size_t lookback = 100, std::size_t num_clusters = 2);
+    RegimeClassifier(std::size_t lookback = 100, std::size_t num_clusters = 3);
     
     // Update with new tick and classify regime
     Regime updateAndClassify(const Tick& tick);
