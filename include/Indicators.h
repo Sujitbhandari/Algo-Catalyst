@@ -42,6 +42,15 @@ public:
     bool isOversold(std::size_t period = 14, double threshold = 30.0) const;
     bool isOverbought(std::size_t period = 14, double threshold = 70.0) const;
 
+    // Bollinger Bands - manually implemented
+    void updateBollingerBands(double price, std::size_t period = 20, double std_dev_mult = 2.0);
+    double getBollingerUpper() const;
+    double getBollingerMiddle() const;
+    double getBollingerLower() const;
+    double getBollingerBandwidth() const;  // (upper - lower) / middle
+    bool isPriceAboveUpperBand() const;
+    bool isPriceBelowLowerBand() const;
+
     // Price metrics
     void updatePrice(double price);
     double getGapUpPercent() const;  // Percent change from open price
@@ -73,6 +82,14 @@ private:
         std::size_t tick_count;
     };
     std::map<std::size_t, RSIState> rsi_states_;
+
+    // Bollinger Bands components
+    std::deque<double> bb_price_history_;
+    double bb_upper_;
+    double bb_middle_;
+    double bb_lower_;
+    std::size_t bb_period_;
+    double bb_std_dev_mult_;
 
     // VWAP components
     double cumulative_price_volume_;

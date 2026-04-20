@@ -7,6 +7,7 @@ namespace AlgoCatalyst {
 
 Indicators::Indicators()
     : ema_12_(0.0), ema_26_(0.0), macd_signal_ema_9_(0.0), macd_tick_count_(0),
+      bb_upper_(0.0), bb_middle_(0.0), bb_lower_(0.0), bb_period_(20), bb_std_dev_mult_(2.0),
       cumulative_price_volume_(0.0), cumulative_volume_(0),
       vwap_session_start_us_(0), prev_close_(0.0), current_price_(0.0),
       open_price_(0.0), is_first_tick_(true) {
@@ -239,6 +240,48 @@ double Indicators::getGapUpPercent() const {
     return ((current_price_ - prev_close_) / prev_close_) * 100.0;
 }
 
+void Indicators::updateBollingerBands(double price, std::size_t period, double std_dev_mult) {
+    bb_period_ = period;
+    bb_std_dev_mult_ = std_dev_mult;
+    bb_price_history_.push_back(price);
+
+    if (bb_price_history_.size() > period) {
+        bb_price_history_.pop_front();
+    }
+
+    if (bb_price_history_.size() < period) return;
+
+    double mean = std::accumulate(bb_price_history_.begin(), bb_price_history_.end(), 0.0) / period;
+
+    double variance = 0.0;
+    for (double p : bb_price_history_) {
+        double diff = p - mean;
+        variance += diff * diff;
+    }
+    double std_dev = std::sqrt(variance / period);
+
+    bb_middle_ = mean;
+    bb_upper_ = mean + std_dev_mult * std_dev;
+    bb_lower_ = mean - std_dev_mult * std_dev;
+}
+
+double Indicators::getBollingerUpper() const { return bb_upper_; }
+double Indicators::getBollingerMiddle() const { return bb_middle_; }
+double Indicators::getBollingerLower() const { return bb_lower_; }
+
+double Indicators::getBollingerBandwidth() const {
+    if (bb_middle_ == 0.0) return 0.0;
+    return (bb_upper_ - bb_lower_) / bb_middle_;
+}
+
+bool Indicators::isPriceAboveUpperBand() const {
+    return bb_upper_ > 0.0 && current_price_ > bb_upper_;
+}
+
+bool Indicators::isPriceBelowLowerBand() const {
+    return bb_lower_ > 0.0 && current_price_ < bb_lower_;
+}
+
 void Indicators::reset() {
     emas_.clear();
     ema_12_ = 0.0;
@@ -247,6 +290,10 @@ void Indicators::reset() {
     macd_tick_count_ = 0;
     macd_histogram_history_.clear();
     rsi_states_.clear();
+    bb_price_history_.clear();
+    bb_upper_ = 0.0;
+    bb_middle_ = 0.0;
+    bb_lower_ = 0.0;
     cumulative_price_volume_ = 0.0;
     cumulative_volume_ = 0;
     vwap_session_start_us_ = 0;
