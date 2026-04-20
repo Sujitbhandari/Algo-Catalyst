@@ -36,23 +36,44 @@ public:
     double getAverageVolume(std::size_t lookback = 20) const;
     double getRelativeVolume() const;  // Current volume / Average volume
     
+    // RSI (Relative Strength Index) - manually implemented
+    void updateRSI(double price, std::size_t period = 14);
+    double getRSI(std::size_t period = 14) const;
+    bool isOversold(std::size_t period = 14, double threshold = 30.0) const;
+    bool isOverbought(std::size_t period = 14, double threshold = 70.0) const;
+
     // Price metrics
     void updatePrice(double price);
-    double getGapUpPercent() const;  // Percent change from previous close
+    double getGapUpPercent() const;  // Percent change from open price
     
     // Reset indicators for new symbol
     void reset();
     
 private:
-    // EMA storage: period -> (current_value, alpha)
-    std::map<std::size_t, std::pair<double, double>> emas_;
+    // EMA storage: period -> (current_value, alpha, tick_count)
+    struct EMAState {
+        double value;
+        double alpha;
+        std::size_t tick_count;
+    };
+    std::map<std::size_t, EMAState> emas_;
     
     // MACD components
     double ema_12_;
     double ema_26_;
     double macd_signal_ema_9_;
+    std::size_t macd_tick_count_;
     std::deque<double> macd_histogram_history_;
     
+    // RSI components: period -> (avg_gain, avg_loss, prev_price, tick_count)
+    struct RSIState {
+        double avg_gain;
+        double avg_loss;
+        double prev_price;
+        std::size_t tick_count;
+    };
+    std::map<std::size_t, RSIState> rsi_states_;
+
     // VWAP components
     double cumulative_price_volume_;
     std::int64_t cumulative_volume_;

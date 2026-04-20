@@ -6,7 +6,7 @@
 namespace AlgoCatalyst {
 
 Indicators::Indicators()
-    : ema_12_(0.0), ema_26_(0.0), macd_signal_ema_9_(0.0),
+    : ema_12_(0.0), ema_26_(0.0), macd_signal_ema_9_(0.0), macd_tick_count_(0),
       cumulative_price_volume_(0.0), cumulative_volume_(0),
       vwap_session_start_us_(0), prev_close_(0.0), current_price_(0.0),
       open_price_(0.0), is_first_tick_(true) {
@@ -16,21 +16,27 @@ void Indicators::updateEMA(double price, std::size_t period) {
     auto it = emas_.find(period);
     
     if (it == emas_.end()) {
-        // Initialize EMA with first price
         double alpha = 2.0 / (period + 1.0);
-        emas_[period] = {price, alpha};
+        emas_[period] = {price, alpha, 1};
     } else {
-        // Update EMA: EMA = alpha * price + (1 - alpha) * prev_EMA
-        double& ema_value = it->second.first;
-        double alpha = it->second.second;
-        ema_value = alpha * price + (1.0 - alpha) * ema_value;
+        EMAState& state = it->second;
+        state.tick_count++;
+        // Use SMA for the first 'period' ticks for a proper warm-up
+        if (state.tick_count <= period) {
+            state.value = state.value + (price - state.value) / state.tick_count;
+        } else {
+            state.value = state.alpha * price + (1.0 - state.alpha) * state.value;
+        }
     }
 }
 
 double Indicators::getEMA(std::size_t period) const {
     auto it = emas_.find(period);
     if (it != emas_.end()) {
-        return it->second.first;
+        // Only return EMA after warm-up period
+        if (it->second.tick_count >= period) {
+            return it->second.value;
+        }
     }
     return 0.0;
 }
@@ -100,6 +106,59 @@ bool Indicators::isMACDHistogramExpanding() const {
     double previous = *(++it);
     
     return current > previous;
+}
+
+void Indicators::updateRSI(double price, std::size_t period) {
+    auto it = rsi_states_.find(period);
+    
+    if (it == rsi_states_.end()) {
+        RSIState state;
+        state.avg_gain = 0.0;
+        state.avg_loss = 0.0;
+        state.prev_price = price;
+        state.tick_count = 1;
+        rsi_states_[period] = state;
+        return;
+    }
+    
+    RSIState& state = it->second;
+    double change = price - state.prev_price;
+    double gain = (change > 0.0) ? change : 0.0;
+    double loss = (change < 0.0) ? -change : 0.0;
+    
+    state.tick_count++;
+    
+    if (state.tick_count <= period) {
+        // Accumulate initial averages via SMA
+        state.avg_gain += (gain - state.avg_gain) / state.tick_count;
+        state.avg_loss += (loss - state.avg_loss) / state.tick_count;
+    } else {
+        // Wilder smoothing
+        double alpha = 1.0 / period;
+        state.avg_gain = alpha * gain + (1.0 - alpha) * state.avg_gain;
+        state.avg_loss = alpha * loss + (1.0 - alpha) * state.avg_loss;
+    }
+    
+    state.prev_price = price;
+}
+
+double Indicators::getRSI(std::size_t period) const {
+    auto it = rsi_states_.find(period);
+    if (it == rsi_states_.end() || it->second.tick_count < period) return 50.0;
+    
+    const RSIState& state = it->second;
+    if (state.avg_loss == 0.0) return 100.0;
+    
+    double rs = state.avg_gain / state.avg_loss;
+    return 100.0 - (100.0 / (1.0 + rs));
+}
+
+bool Indicators::isOversold(std::size_t period, double threshold) const {
+    return getRSI(period) < threshold;
+}
+
+bool Indicators::isOverbought(std::size_t period, double threshold) const {
+    return getRSI(period) > threshold;
 }
 
 void Indicators::updateVWAP(double price, std::int64_t volume, std::int64_t timestamp_us) {
@@ -185,7 +244,9 @@ void Indicators::reset() {
     ema_12_ = 0.0;
     ema_26_ = 0.0;
     macd_signal_ema_9_ = 0.0;
+    macd_tick_count_ = 0;
     macd_histogram_history_.clear();
+    rsi_states_.clear();
     cumulative_price_volume_ = 0.0;
     cumulative_volume_ = 0;
     vwap_session_start_us_ = 0;
