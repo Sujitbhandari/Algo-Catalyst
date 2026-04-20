@@ -3,7 +3,6 @@
 #include <string>
 #include <chrono>
 #include <memory>
-#include <variant>
 #include <cstdint>
 
 namespace AlgoCatalyst {
@@ -23,6 +22,9 @@ struct Tick {
     std::int64_t volume;
     double bid_size;
     double ask_size;
+    std::string symbol;         // Symbol this tick belongs to
+    double high;                // Tick high (for ATR / candle reconstruction)
+    double low;                 // Tick low
 };
 
 // Base Event class
