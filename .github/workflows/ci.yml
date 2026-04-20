@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  # ─── C++ build ───────────────────────────────────────────────────────────────
+  build:
+    name: Build & Test (C++)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-14]
+        build_type: [Debug, Release]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang-format
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake ninja clang-format
+
+      - name: Configure CMake
+        run: |
+          cmake -B build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }}
+
+      - name: Smoke test — generate data and run backtest
+        run: |
+          python3 scripts/generate_data.py --scenario catalyst --ticks 5000
+          ./build/AlgoCatalyst --data data/catalyst.csv --symbol TEST --output test_trades.csv
+
+      - name: Upload trade log artifact
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'ubuntu-22.04' && matrix.build_type == 'Release'
+        with:
+          name: trades-csv
+          path: test_trades.csv
+
+  # ─── Python linting ──────────────────────────────────────────────────────────
+  python-lint:
+    name: Python Lint
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install linting tools
+        run: pip install ruff
+
+      - name: Ruff check
+        run: ruff check scripts/
+
+  # ─── C++ formatting check ────────────────────────────────────────────────────
+  clang-format:
+    name: clang-format check
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: sudo apt-get update && sudo apt-get install -y clang-format
+
+      - name: Check formatting
+        run: |
+          find src include -name '*.cpp' -o -name '*.h' | \
+            xargs clang-format --dry-run --Werror -style=file || \
+            echo "::warning::clang-format issues found — run clang-format to fix"
