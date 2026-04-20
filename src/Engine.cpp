@@ -173,11 +173,9 @@ void Backtester::processOrderEvent(std::unique_ptr<OrderEvent> event) {
     // Simulate latency: Fill happens after latency_ms_ milliseconds
     std::int64_t fill_timestamp_us = applyLatency(event->getTimestamp());
     
-    // Get current market price (simplified: use order price for now)
-    // In a real system, we'd look up the tick at fill_timestamp_us
+    // Get market price at fill time
     double fill_price = event->getPrice();
     
-    // Try to get actual price at fill time from tick data
     if (tick_data_.find(symbol) != tick_data_.end()) {
         const auto& ticks = tick_data_[symbol];
         for (const auto& tick : ticks) {
@@ -188,9 +186,17 @@ void Backtester::processOrderEvent(std::unique_ptr<OrderEvent> event) {
         }
     }
     
-    // Calculate commission (simplified: 0.01% per trade)
+    // Apply slippage: buys pay more, sells receive less
+    double slippage_factor = slippage_bps_ / 10000.0;
+    if (event->getDirection() == SignalEvent::Direction::LONG) {
+        fill_price *= (1.0 + slippage_factor);
+    } else if (event->getDirection() == SignalEvent::Direction::EXIT) {
+        fill_price *= (1.0 - slippage_factor);
+    }
+    
+    // Per-share commission with minimum
     double quantity = event->getQuantity();
-    double commission = fill_price * quantity * 0.0001;
+    double commission = std::max(quantity * commission_per_share_, min_commission_);
     
     // Create fill event
     auto fill_event = std::make_unique<FillEvent>(

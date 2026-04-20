@@ -26,10 +26,15 @@ struct TradeRecord {
     std::string regime;
 };
 
-// Backtester Engine - Event-Driven Architecture
+    // Backtester Engine - Event-Driven Architecture
 class Backtester {
 public:
-    Backtester(double latency_ms = 200.0);
+    explicit Backtester(double latency_ms = 200.0);
+    
+    // Execution model configuration
+    void setSlippageBps(double bps) { slippage_bps_ = bps; }
+    void setCommissionPerShare(double commission) { commission_per_share_ = commission; }
+    void setMinCommission(double min_comm) { min_commission_ = min_comm; }
     
     // Load tick data from CSV
     bool loadTickData(const std::string& csv_path, const std::string& symbol);
@@ -95,6 +100,9 @@ private:
     std::vector<TradeRecord> trade_log_;
     
     double latency_ms_;
+    double slippage_bps_ = 5.0;       // 0.5 bps default slippage
+    double commission_per_share_ = 0.005; // $0.005 per share
+    double min_commission_ = 1.0;         // $1.00 minimum commission
     std::int64_t current_time_us_;
 };
 
