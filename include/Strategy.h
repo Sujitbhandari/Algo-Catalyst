@@ -85,5 +85,37 @@ private:
     double highest_price_since_entry_ = 0.0;  // For trailing stop
 };
 
+// Mean Reversion Strategy - trades Bollinger Band breakouts and RSI extremes
+class MeanReversionStrategy : public Strategy {
+public:
+    MeanReversionStrategy(const std::string& symbol, RegimeClassifier* regime_classifier);
+
+    std::vector<EventPtr> processMarketUpdate(const MarketUpdateEvent& event) override;
+
+    void setRSIPeriod(std::size_t period) { rsi_period_ = period; }
+    void setOversoldThreshold(double threshold) { oversold_threshold_ = threshold; }
+    void setOverboughtThreshold(double threshold) { overbought_threshold_ = threshold; }
+    void setBBPeriod(std::size_t period) { bb_period_ = period; }
+    void setBasePositionSize(double size) { base_position_size_ = size; }
+    void setStopLossPercent(double pct) { stop_loss_pct_ = pct; }
+    void setTakeProfitPercent(double pct) { take_profit_pct_ = pct; }
+
+private:
+    bool checkEntryConditions(const Tick& tick);
+    bool checkExitConditions(const Tick& tick);
+
+    RegimeClassifier* regime_classifier_;
+
+    std::size_t rsi_period_ = 14;
+    double oversold_threshold_ = 30.0;
+    double overbought_threshold_ = 70.0;
+    std::size_t bb_period_ = 20;
+    double base_position_size_ = 100.0;
+    double stop_loss_pct_ = 1.5;
+    double take_profit_pct_ = 3.0;
+
+    double entry_price_ = 0.0;
+};
+
 } // namespace AlgoCatalyst
 

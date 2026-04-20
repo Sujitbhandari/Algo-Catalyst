@@ -228,5 +228,78 @@ bool NewsMomentumStrategy::checkOrderBookImbalance(const Tick& tick) {
     return bid_ask_ratio >= min_bid_ask_ratio_;
 }
 
+// Mean Reversion Strategy Implementation
+MeanReversionStrategy::MeanReversionStrategy(const std::string& symbol,
+                                             RegimeClassifier* regime_classifier)
+    : Strategy(symbol), regime_classifier_(regime_classifier) {}
+
+std::vector<EventPtr> MeanReversionStrategy::processMarketUpdate(const MarketUpdateEvent& event) {
+    std::vector<EventPtr> signals;
+    const Tick& tick = event.getTick();
+    std::int64_t timestamp_us = event.getTimestamp();
+
+    if (regime_classifier_) {
+        regime_classifier_->updateAndClassify(tick);
+    }
+
+    indicators_.updatePrice(tick.price);
+    indicators_.updateRSI(tick.price, rsi_period_);
+    indicators_.updateBollingerBands(tick.price, bb_period_);
+    indicators_.updateEMA(tick.price, 20);
+    indicators_.updateVolume(tick.volume, timestamp_us);
+
+    if (hasPosition()) {
+        if (checkExitConditions(tick)) {
+            signals.push_back(std::make_unique<SignalEvent>(
+                timestamp_us, symbol_, SignalEvent::Direction::EXIT,
+                std::abs(position_), tick.price));
+        }
+        return signals;
+    }
+
+    if (checkEntryConditions(tick)) {
+        signals.push_back(std::make_unique<SignalEvent>(
+            timestamp_us, symbol_, SignalEvent::Direction::LONG,
+            base_position_size_, tick.price));
+        entry_price_ = tick.price;
+    }
+
+    return signals;
+}
+
+bool MeanReversionStrategy::checkEntryConditions(const Tick& tick) {
+    // Enter long when RSI is oversold AND price is below the lower Bollinger Band
+    // Only in CHOPPY regime (mean reversion works better there)
+    if (regime_classifier_ &&
+        regime_classifier_->getCurrentRegime() != RegimeClassifier::Regime::CHOPPY) {
+        return false;
+    }
+
+    bool rsi_oversold = indicators_.isOversold(rsi_period_, oversold_threshold_);
+    bool below_lower_band = indicators_.isPriceBelowLowerBand();
+
+    return rsi_oversold && below_lower_band;
+}
+
+bool MeanReversionStrategy::checkExitConditions(const Tick& tick) {
+    // Hard stop-loss
+    if (entry_price_ > 0.0 && stop_loss_pct_ > 0.0) {
+        double loss_pct = ((entry_price_ - tick.price) / entry_price_) * 100.0;
+        if (loss_pct >= stop_loss_pct_) return true;
+    }
+
+    // Take-profit
+    if (entry_price_ > 0.0 && take_profit_pct_ > 0.0) {
+        double gain_pct = ((tick.price - entry_price_) / entry_price_) * 100.0;
+        if (gain_pct >= take_profit_pct_) return true;
+    }
+
+    // Exit when RSI recovers above middle band (mean reversion achieved)
+    bool rsi_neutral = !indicators_.isOversold(rsi_period_, oversold_threshold_);
+    bool above_middle = tick.price > indicators_.getBollingerMiddle();
+
+    return rsi_neutral && above_middle;
+}
+
 } // namespace AlgoCatalyst
 
