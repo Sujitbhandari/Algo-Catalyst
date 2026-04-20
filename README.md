@@ -1,166 +1,258 @@
-# Algo-Catalyst: High-Performance Event-Driven Trading Engine
+# Algo-Catalyst
 
-An Event-Driven C++20 Trading Engine designed for high-volatility news strategies.
+**High-Performance Event-Driven Trading Backtesting Engine — C++20**
+
+[![CI](https://github.com/sujitbhandari/Algo-Catalyst/actions/workflows/ci.yml/badge.svg)](https://github.com/sujitbhandari/Algo-Catalyst/actions)
+
+A zero-dependency C++20 backtesting engine for high-volatility **news catalyst** and **mean-reversion** strategies. All indicators, k-Means clustering, and execution simulation are implemented from scratch.
+
+---
+
+## Architecture
+
+```
+CSV Tick Data
+     │
+     ▼
+ TickLoader ──► priority_queue<Event>
+                       │
+          ┌────────────▼────────────┐
+          │      Backtester         │
+          │  (event-driven loop)    │
+          └──┬──────────┬───────────┘
+             │          │
+   MarketUpdate      FillEvent
+        │                │
+        ▼                ▼
+   Strategy         Position tracker
+ (Indicators,       (PnL, drawdown,
+  RegimeClassifier)  circuit breakers)
+        │
+    SignalEvent → OrderEvent → FillEvent (+ latency + slippage)
+                                  │
+                             trades.csv
+                                  │
+                          plot_performance.py
+```
+
+---
 
 ## Features
 
-Event-Driven Architecture: Implements a Backtester class using a priority queue-based event loop.
+### Event-Driven Engine
+- **Priority-queue** event loop with O(log n) insertion
+- **Latency simulation**: configurable fill delay (default 200 ms)
+- **Slippage model**: directional basis-point slippage on fills
+- **Commission model**: per-share + minimum commission
+- **Risk circuit breakers**: max drawdown & daily loss limits
 
-News Momentum Algorithm filters trades using:
-- 90/200 EMA trends for long-term bullish trend detection
-- 9-EMA crossover above 90-EMA
-- VWAP holds where price must be above Volume Weighted Average Price
-- MACD confirmation with expanding histogram for momentum
-- Level 2 Bid-Ask imbalances requiring greater than 1.5x buying pressure
+### Indicators (all hand-rolled, zero dependencies)
+| Indicator | Details |
+|-----------|---------|
+| EMA | SMA warm-up for first `period` ticks, then exponential smoothing |
+| MACD | 12/26 EMA lines + 9-period EMA signal with histogram |
+| RSI | Wilder smoothing, configurable period |
+| Bollinger Bands | SMA ± N × σ with bandwidth metric |
+| ATR | Wilder smoothing over True Range |
+| VWAP | Session-based with automatic midnight reset |
 
-AI Regime Detector uses custom k-Means clustering written from scratch to classify market regimes:
-- Regime 0 (Choppy): Low volatility, mean-reverting. Disables trading.
-- Regime 1 (Trending): High directed volatility. Enables trading with increased position size.
+### Market Regime Classifier
+k-Means clustering (written from scratch) over volatility, directional strength, and relative volume:
 
-Latency Simulation: Fixed 200ms latency between signal generation and fill execution to simulate real-world execution delays.
+| Regime | Condition | Position Multiplier |
+|--------|-----------|---------------------|
+| **TRENDING** | High vol + strong direction | 1.5× |
+| **VOLATILE** | High vol + weak direction | 0.5× |
+| **CHOPPY** | Low volatility | 0× (disabled) |
 
-All technical indicators (EMA, MACD, VWAP) and k-Means clustering are implemented manually with zero external dependencies.
+### Strategies
+**NewsMomentumStrategy** — all conditions must align:
+1. Volume spike > 5× 20-tick average
+2. Gap up > 10% from session open
+3. Price above 90-EMA and 200-EMA (bullish stack)
+4. 9-EMA crossover above 90-EMA
+5. Price above VWAP
+6. MACD histogram expanding
+7. Bid/Ask ratio > 1.5×
+8. Regime = **TRENDING**
 
-## Building
+Exits: stop-loss · trailing stop · take-profit · VWAP break · regime change
 
-Requirements: C++20 compatible compiler (GCC 10+, Clang 12+, MSVC 2019+) and CMake 3.20+
+**MeanReversionStrategy** — for CHOPPY regimes:
+- Enter when RSI < 30 AND price below lower Bollinger Band
+- Exit when RSI recovers OR price crosses above middle band
 
-Build Instructions:
+### Position Sizing
+- Fractional **Kelly criterion** (half-Kelly) computed from live win rate & avg win/loss
+- Regime multiplier applied on top
+
+---
+
+## Quick Start
+
+### One-command pipeline
 
 ```bash
-mkdir build
-cd build
-cmake ..
-make
+./visualize.sh --scenario catalyst --ticks 10000 --open
 ```
 
-Run the executable:
+This builds the engine, generates synthetic data, runs the backtest, and opens the chart.
+
+### Manual steps
 
 ```bash
-./AlgoCatalyst [csv_file] [symbol]
+# 1. Build
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+
+# 2. Generate synthetic data
+python3 scripts/generate_data.py --scenario catalyst --ticks 10000
+
+# 3. Run backtest
+./build/AlgoCatalyst \
+    --data data/catalyst.csv \
+    --symbol AAPL \
+    --latency 200 \
+    --stop-loss 2.0 \
+    --take-profit 6.0 \
+    --trailing 3.0 \
+    --output trades.csv
+
+# 4. Visualize
+python3 scripts/plot_performance.py --trades trades.csv --ticks data/catalyst.csv
 ```
 
-Example:
-```bash
-./AlgoCatalyst ../data/tick_data.csv TICKER
+---
+
+## CLI Reference
+
 ```
+./AlgoCatalyst [OPTIONS]
+
+  --data <path>        Tick CSV file           (default: data/tick_data.csv)
+  --symbol <sym>       Ticker symbol           (default: TICKER)
+  --latency <ms>       Fill latency in ms      (default: 200)
+  --output <path>      Trade log CSV path      (default: trades.csv)
+  --stop-loss <pct>    Hard stop-loss %        (default: 2.0)
+  --take-profit <pct>  Take-profit %           (default: 6.0)
+  --trailing <pct>     Trailing stop %         (default: 3.0)
+  --slippage <bps>     Slippage basis points   (default: 5)
+  --help               Show this message
+```
+
+---
 
 ## CSV Data Format
 
-The CSV file must contain the following columns:
-```
-Timestamp,Price,Volume,Bid_Size,Ask_Size
-```
-
-- Timestamp: Unix timestamp in microseconds
-- Price: Tick price
-- Volume: Trade volume for this tick
-- Bid_Size: Total bid size at best bid
-- Ask_Size: Total ask size at best ask
-
-Example:
 ```csv
-Timestamp,Price,Volume,Bid_Size,Ask_Size
-1609459200000000,100.00,1000,5000,3000
-1609459201000000,101.50,1500,6000,3500
+Timestamp,Price,Volume,Bid_Size,Ask_Size[,High,Low]
 ```
 
-## Strategy Logic
+- `Timestamp`: Unix microseconds **or** ISO 8601 (`2024-01-15T09:30:00.123456`)
+- `High` / `Low` columns are optional (used by ATR)
 
-Entry Conditions (all must be true):
+---
 
-1. Volume Spike: Relative volume greater than 5x average using 20-tick rolling average
-2. Gap Up: Price gap greater than 10% from previous close
-3. EMA Trend: Price above both 90-EMA and 200-EMA, with 90-EMA greater than 200-EMA
-4. EMA Crossover: 9-EMA crosses above 90-EMA
-5. VWAP Hold: Price above VWAP
-6. MACD Expansion: MACD histogram is expanding indicating momentum
-7. Order Book Imbalance: Bid Size greater than 1.5x Ask Size
-8. Regime: Must be in TRENDING regime as classified by k-Means
+## Data Generator
 
-Exit Conditions (any condition triggers exit):
+Four built-in market scenarios:
 
-- Price drops below VWAP
-- MACD histogram contracts or turns negative
-- Regime switches to CHOPPY
+| Scenario | Description |
+|----------|-------------|
+| `catalyst` | News-driven gap-up → strong trend |
+| `meanrev` | Choppy, oscillating around a mean |
+| `trending` | Slow steady drift, no catalyst |
+| `volatile` | High-sigma random walk, no direction |
 
-## Performance
-
-The engine is designed to process over 1 million ticks efficiently using a priority queue for O(log n) event insertion, in-place indicator calculations, and minimal memory allocation during runtime.
-
-## Technical Implementation Notes
-
-EMA Calculation is manually implemented using alpha = 2/(period+1). MACD uses 12-EMA minus 26-EMA with a 9-EMA signal line. VWAP is calculated as cumulative (Price × Volume) divided by cumulative Volume. The k-Means implementation uses Euclidean distance with up to 10 iterations. Latency simulation timestamps events with a latency offset to model realistic execution delays.
-
-## Example Output
-
-```
-Algo-Catalyst: High-Performance Trading Engine v1.0
-Event-Driven Backtesting for News Catalyst Strategies
-
-Loading tick data from: data/tick_data.csv
-Processed 1000000 events...
-
-TRADE LOG
-Symbol          Entry Time          Exit Time            Entry Price  Exit Price  Quantity  PnL         Regime
-----------------------------------------------------------------------------------------------------
-TICKER          1609459203000000    1609459212000000     103.00       114.50       150.00    1725.00     TRENDING
-
-Total Trades: 1
-Total PnL: $1725.00
-```
-
-## Visualization
-
-After running the backtest, you can visualize the strategy performance using the included Python script.
-
-Requirements:
-- Python 3.7+
-- pandas
-- matplotlib
-- numpy
-
-Setup (first time only):
 ```bash
-# Create virtual environment (if not already created)
-python3 -m venv venv
-
-# Activate virtual environment
-source venv/bin/activate
-
-# Install Python dependencies
-python3 -m pip install pandas matplotlib numpy
+python3 scripts/generate_data.py --scenario catalyst --ticks 20000 --seed 99
 ```
 
-Run the backtest to generate trades.csv:
+---
+
+## Performance Metrics
+
+The engine prints after each backtest:
+
+```
+========== PERFORMANCE SUMMARY ==========
+Total Trades:    42
+Total PnL:       $3,847.12
+Win Rate:        64.29%
+Profit Factor:   2.31
+Avg Win:         $198.45
+Avg Loss:        $-86.20
+Max Drawdown:    $412.00
+Sharpe Ratio:    1.847
+=========================================
+```
+
+---
+
+## Building
+
+**Requirements**: C++20 (GCC 10+, Clang 12+, MSVC 2022), CMake 3.20+
+
 ```bash
-./AlgoCatalyst ../data/tick_data.csv TICKER
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+cmake --build build --config Release
 ```
 
-Then generate the visualization:
+Debug build with sanitizers:
 ```bash
-# Make sure virtual environment is activated
-source venv/bin/activate
-
-# Run the visualization script
-python3 scripts/plot_performance.py
+cmake -B build-dbg -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-dbg
 ```
 
-Important: Run the visualization from the project root directory (Algo-Catalyst), not from the build directory. 
+---
 
-If you're in the build directory, go back to the project root first:
+## Python Visualization
+
 ```bash
-cd ..  # Go back to project root
-source venv/bin/activate
-python3 scripts/plot_performance.py
+pip install -r requirements.txt
+python3 scripts/plot_performance.py --trades trades.csv --output chart.png
 ```
 
-Note: On macOS with Homebrew-managed Python, use a virtual environment. The venv folder is already set up with required packages.
+The chart includes:
+- Price action with trade markers & regime shading
+- Equity curve with profit/loss fill
+- Drawdown panel
+- PnL distribution histogram
+- Summary statistics overlay
 
-The script generates two plots:
-1. Price Action: Shows price movement with buy/sell markers and regime background coloring (green for TRENDING, red for CHOPPY)
-2. Equity Curve: Displays cumulative profit/loss over time
+---
 
-The plot is saved as performance_plot.png and displayed interactively.
+## Project Structure
 
+```
+Algo-Catalyst/
+├── include/
+│   ├── Events.h          # Tick, Event hierarchy
+│   ├── Engine.h          # Backtester, TickLoader
+│   ├── Indicators.h      # EMA, MACD, RSI, BB, ATR, VWAP
+│   ├── Strategy.h        # Strategy interface + NewsMomentum + MeanReversion
+│   ├── AI_Regime.h       # k-Means RegimeClassifier
+│   └── Version.h         # Compile-time version constants
+├── src/
+│   ├── main.cpp          # CLI entry point
+│   ├── Engine.cpp
+│   ├── Indicators.cpp
+│   ├── Strategy.cpp
+│   └── AI_Regime.cpp
+├── scripts/
+│   ├── generate_data.py  # Synthetic market data generator
+│   └── plot_performance.py
+├── data/
+│   └── tick_data.csv
+├── .github/workflows/ci.yml
+├── CMakeLists.txt
+├── requirements.txt
+├── .clang-format
+└── visualize.sh
+```
 
+---
+
+## License
+
+MIT
