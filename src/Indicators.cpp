@@ -240,6 +240,47 @@ double Indicators::getGapUpPercent() const {
     return ((current_price_ - prev_close_) / prev_close_) * 100.0;
 }
 
+void Indicators::updateATR(double high, double low, double close, std::size_t period) {
+    auto it = atr_states_.find(period);
+
+    if (it == atr_states_.end()) {
+        ATRState state;
+        state.atr = high - low;
+        state.prev_close = close;
+        state.tick_count = 1;
+        atr_states_[period] = state;
+        return;
+    }
+
+    ATRState& state = it->second;
+    state.tick_count++;
+
+    double tr = std::max({high - low,
+                          std::abs(high - state.prev_close),
+                          std::abs(low - state.prev_close)});
+
+    if (state.tick_count <= period) {
+        // SMA warm-up
+        state.atr += (tr - state.atr) / state.tick_count;
+    } else {
+        // Wilder smoothing
+        state.atr = (state.atr * (period - 1) + tr) / period;
+    }
+
+    state.prev_close = close;
+}
+
+double Indicators::getATR(std::size_t period) const {
+    auto it = atr_states_.find(period);
+    if (it == atr_states_.end() || it->second.tick_count < period) return 0.0;
+    return it->second.atr;
+}
+
+double Indicators::getATRPercent(double price, std::size_t period) const {
+    if (price == 0.0) return 0.0;
+    return (getATR(period) / price) * 100.0;
+}
+
 void Indicators::updateBollingerBands(double price, std::size_t period, double std_dev_mult) {
     bb_period_ = period;
     bb_std_dev_mult_ = std_dev_mult;
@@ -290,6 +331,7 @@ void Indicators::reset() {
     macd_tick_count_ = 0;
     macd_histogram_history_.clear();
     rsi_states_.clear();
+    atr_states_.clear();
     bb_price_history_.clear();
     bb_upper_ = 0.0;
     bb_middle_ = 0.0;

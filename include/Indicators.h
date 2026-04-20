@@ -51,6 +51,11 @@ public:
     bool isPriceAboveUpperBand() const;
     bool isPriceBelowLowerBand() const;
 
+    // ATR (Average True Range) - measures volatility
+    void updateATR(double high, double low, double close, std::size_t period = 14);
+    double getATR(std::size_t period = 14) const;
+    double getATRPercent(double price, std::size_t period = 14) const;  // ATR / price * 100
+
     // Price metrics
     void updatePrice(double price);
     double getGapUpPercent() const;  // Percent change from open price
@@ -90,6 +95,14 @@ private:
     double bb_lower_;
     std::size_t bb_period_;
     double bb_std_dev_mult_;
+
+    // ATR components: period -> (atr_value, prev_close, tick_count)
+    struct ATRState {
+        double atr;
+        double prev_close;
+        std::size_t tick_count;
+    };
+    std::map<std::size_t, ATRState> atr_states_;
 
     // VWAP components
     double cumulative_price_volume_;
