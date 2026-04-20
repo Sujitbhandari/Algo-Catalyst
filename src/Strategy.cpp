@@ -59,6 +59,7 @@ std::vector<EventPtr> NewsMomentumStrategy::processMarketUpdate(const MarketUpda
             
             entry_timestamp_us_ = timestamp_us;
             entry_price_ = tick.price;
+            highest_price_since_entry_ = tick.price;
         }
     }
     
@@ -105,10 +106,24 @@ bool NewsMomentumStrategy::checkEntryConditions(const Tick& tick) {
 }
 
 bool NewsMomentumStrategy::checkExitConditions(const Tick& tick) {
-    // Hard stop-loss: exit if loss exceeds stop_loss_pct_
+    // Update peak price for trailing stop
+    if (tick.price > highest_price_since_entry_) {
+        highest_price_since_entry_ = tick.price;
+    }
+
+    // Hard stop-loss: exit if loss from entry exceeds stop_loss_pct_
     if (entry_price_ > 0.0 && stop_loss_pct_ > 0.0) {
         double loss_pct = ((entry_price_ - tick.price) / entry_price_) * 100.0;
         if (loss_pct >= stop_loss_pct_) {
+            return true;
+        }
+    }
+
+    // Trailing stop: exit if price pulls back trailing_stop_pct_ from peak
+    if (trailing_stop_pct_ > 0.0 && highest_price_since_entry_ > 0.0) {
+        double pullback_pct = ((highest_price_since_entry_ - tick.price) /
+                               highest_price_since_entry_) * 100.0;
+        if (pullback_pct >= trailing_stop_pct_) {
             return true;
         }
     }
