@@ -55,8 +55,11 @@ private:
     // Check exit conditions
     bool checkExitConditions(const Tick& tick);
     
-    // Calculate position size based on regime
+    // Calculate position size (Kelly-informed, regime-adjusted)
     double calculatePositionSize();
+    
+    // Update win/loss stats for Kelly fraction
+    void recordTrade(double pnl);
     
     // Entry condition checks
     bool checkVolumeSpike();      // Relative volume > threshold
@@ -83,6 +86,12 @@ private:
     std::int64_t entry_timestamp_us_ = 0;
     double entry_price_ = 0.0;
     double highest_price_since_entry_ = 0.0;  // For trailing stop
+
+    // Kelly criterion tracking
+    int trades_won_   = 0;
+    int trades_total_ = 0;
+    double avg_win_  = 0.0;
+    double avg_loss_ = 0.0;
 };
 
 // Mean Reversion Strategy - trades Bollinger Band breakouts and RSI extremes

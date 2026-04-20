@@ -1,6 +1,7 @@
 #include "Strategy.h"
 #include "AI_Regime.h"
 #include <algorithm>
+#include <cmath>
 
 namespace AlgoCatalyst {
 
@@ -159,17 +160,34 @@ bool NewsMomentumStrategy::checkExitConditions(const Tick& tick) {
 }
 
 double NewsMomentumStrategy::calculatePositionSize() {
-    double base_size = base_position_size_;
-    
-    // Adjust based on regime
+    double regime_mult = 1.0;
     if (regime_classifier_) {
-        double multiplier = regime_classifier_->getPositionMultiplier();
-        if (multiplier > 0.0) {
-            return base_size * multiplier;
-        }
+        regime_mult = regime_classifier_->getPositionMultiplier();
+        if (regime_mult <= 0.0) return 0.0;
     }
-    
-    return base_size;
+
+    // Kelly fraction approximation: f = win_rate - (1 - win_rate) / win_loss_ratio
+    double kelly_mult = 1.0;
+    if (trades_total_ >= 10 && avg_loss_ < 0.0) {
+        double win_rate  = static_cast<double>(trades_won_) / trades_total_;
+        double win_loss  = std::abs(avg_win_ / avg_loss_);
+        double kelly     = win_rate - (1.0 - win_rate) / win_loss;
+        // Apply fractional Kelly (half-Kelly) and clamp to [0.25, 2.0]
+        kelly_mult = std::clamp(kelly * 0.5, 0.25, 2.0);
+    }
+
+    return base_position_size_ * regime_mult * kelly_mult;
+}
+
+void NewsMomentumStrategy::recordTrade(double pnl) {
+    trades_total_++;
+    if (pnl > 0.0) {
+        trades_won_++;
+        avg_win_ += (pnl - avg_win_) / trades_won_;
+    } else {
+        int losses = trades_total_ - trades_won_;
+        avg_loss_ += (pnl - avg_loss_) / losses;
+    }
 }
 
 bool NewsMomentumStrategy::checkVolumeSpike() {
