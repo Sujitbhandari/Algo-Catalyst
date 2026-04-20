@@ -489,38 +489,70 @@ std::vector<Tick> TickLoader::loadFromCSV(const std::string& filepath) {
     
     std::string line;
     bool is_first_line = true;
-    
+    std::size_t line_num = 0;
+    std::int64_t prev_timestamp = 0;
+    std::size_t skipped = 0;
+
     while (std::getline(file, line)) {
-        // Skip header line
+        ++line_num;
+
         if (is_first_line) {
             is_first_line = false;
             continue;
         }
-        
-        // Skip empty lines
-        if (line.empty()) continue;
-        
+
+        if (line.empty() || line[0] == '#') continue;
+
         std::istringstream ss(line);
         std::string field;
+        std::vector<std::string> fields;
+
+        while (std::getline(ss, field, ',')) {
+            fields.push_back(field);
+        }
+
+        // Validate column count (at least 5 required)
+        if (fields.size() < 5) {
+            std::cerr << "[WARN] Line " << line_num << ": expected 5 columns, got "
+                      << fields.size() << " — skipping\n";
+            ++skipped;
+            continue;
+        }
+
         Tick tick;
-        
-        // Parse: Timestamp, Price, Volume, Bid_Size, Ask_Size
-        std::getline(ss, field, ',');
-        tick.timestamp_us = parseTimestamp(field);
-        
-        std::getline(ss, field, ',');
-        tick.price = std::stod(field);
-        
-        std::getline(ss, field, ',');
-        tick.volume = std::stoll(field);
-        
-        std::getline(ss, field, ',');
-        tick.bid_size = std::stod(field);
-        
-        std::getline(ss, field, ',');
-        tick.ask_size = std::stod(field);
-        
+        try {
+            tick.timestamp_us = parseTimestamp(fields[0]);
+            tick.price        = std::stod(fields[1]);
+            tick.volume       = std::stoll(fields[2]);
+            tick.bid_size     = std::stod(fields[3]);
+            tick.ask_size     = std::stod(fields[4]);
+            tick.high         = (fields.size() > 5) ? std::stod(fields[5]) : tick.price;
+            tick.low          = (fields.size() > 6) ? std::stod(fields[6]) : tick.price;
+        } catch (const std::exception& e) {
+            std::cerr << "[WARN] Line " << line_num << ": parse error (" << e.what()
+                      << ") — skipping\n";
+            ++skipped;
+            continue;
+        }
+
+        // Data sanity: price and volume must be positive
+        if (tick.price <= 0.0 || tick.volume < 0) {
+            std::cerr << "[WARN] Line " << line_num << ": invalid price/volume — skipping\n";
+            ++skipped;
+            continue;
+        }
+
+        // Warn on non-monotonic timestamps but keep the tick
+        if (prev_timestamp > 0 && tick.timestamp_us < prev_timestamp) {
+            std::cerr << "[WARN] Line " << line_num << ": non-monotonic timestamp\n";
+        }
+        prev_timestamp = tick.timestamp_us;
+
         ticks.push_back(tick);
+    }
+
+    if (skipped > 0) {
+        std::cerr << "[INFO] Skipped " << skipped << " malformed rows.\n";
     }
     
     file.close();
