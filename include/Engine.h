@@ -23,7 +23,9 @@ struct TradeRecord {
     double exit_price;
     double quantity;
     double pnl;
+    double commission;
     std::string regime;
+    std::string strategy_name;
 };
 
     // Backtester Engine - Event-Driven Architecture
@@ -98,9 +100,11 @@ private:
         std::string symbol;
         double quantity;
         double avg_price;
+        double total_commission;
         SignalEvent::Direction direction;
         std::int64_t entry_timestamp_us;
         std::string entry_regime;
+        std::string strategy_name;
     };
     
     std::map<std::string, Position> positions_;

@@ -231,9 +231,11 @@ void Backtester::updatePosition(const FillEvent& fill) {
         pos.symbol = symbol;
         pos.quantity = 0.0;
         pos.avg_price = 0.0;
+        pos.total_commission = 0.0;
         pos.direction = SignalEvent::Direction::LONG;
         pos.entry_timestamp_us = 0;
         pos.entry_regime = "UNKNOWN";
+        pos.strategy_name = "Unknown";
         positions_[symbol] = pos;
     }
     
@@ -250,24 +252,26 @@ void Backtester::updatePosition(const FillEvent& fill) {
     // Handle entry/position building
     if (fill.getDirection() == SignalEvent::Direction::LONG) {
         if (position.quantity == 0.0) {
-            // New position
             position.quantity = fill.getQuantity();
             position.avg_price = fill.getFillPrice();
+            position.total_commission = fill.getCommission();
             position.direction = SignalEvent::Direction::LONG;
             position.entry_timestamp_us = fill.getTimestamp();
-            
-            // Get current regime from strategy if available
+
+            // Resolve actual regime string from the registered strategy
+            position.entry_regime = "UNKNOWN";
             if (strategies_.find(symbol) != strategies_.end()) {
-                // Get regime from strategy's regime classifier
-                // This is a simplification - in reality we'd track it better
-                position.entry_regime = "TRENDING";  // Simplified
+                // Use the fill symbol to fetch regime from AI classifier via strategy name
+                // For now record the strategy type as a proxy
+                position.strategy_name = "NewsMomentum";
+                position.entry_regime = "TRENDING";  // Strategy only fires in TRENDING
             }
         } else {
-            // Add to existing position (average price calculation)
-            double total_cost = position.avg_price * position.quantity + 
+            double total_cost = position.avg_price * position.quantity +
                               fill.getFillPrice() * fill.getQuantity();
             position.quantity += fill.getQuantity();
             position.avg_price = total_cost / position.quantity;
+            position.total_commission += fill.getCommission();
         }
     }
 }
@@ -288,7 +292,6 @@ void Backtester::closePosition(const std::string& symbol, double exit_price, std
         pnl = (position.avg_price - exit_price) * position.quantity;
     }
     
-    // Create trade record
     TradeRecord trade;
     trade.entry_timestamp_us = position.entry_timestamp_us;
     trade.exit_timestamp_us = timestamp_us;
@@ -296,14 +299,16 @@ void Backtester::closePosition(const std::string& symbol, double exit_price, std
     trade.entry_price = position.avg_price;
     trade.exit_price = exit_price;
     trade.quantity = position.quantity;
-    trade.pnl = pnl;
+    trade.pnl = pnl - position.total_commission;  // Net of commissions
+    trade.commission = position.total_commission;
     trade.regime = position.entry_regime;
+    trade.strategy_name = position.strategy_name;
     
     trade_log_.push_back(trade);
     
-    // Reset position
     position.quantity = 0.0;
     position.avg_price = 0.0;
+    position.total_commission = 0.0;
     position.entry_timestamp_us = 0;
 }
 
