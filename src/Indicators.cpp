@@ -295,6 +295,41 @@ double Indicators::getATRPercent(double price, std::size_t period) const {
     return (getATR(period) / price) * 100.0;
 }
 
+void Indicators::updateStochastic(double high, double low, double close,
+                                   std::size_t k_period, std::size_t d_period) {
+    stoch_highs_.push_back(high);
+    stoch_lows_.push_back(low);
+    if (stoch_highs_.size() > k_period) stoch_highs_.pop_front();
+    if (stoch_lows_.size()  > k_period) stoch_lows_.pop_front();
+
+    if (stoch_highs_.size() < k_period) return;
+
+    double highest = *std::max_element(stoch_highs_.begin(), stoch_highs_.end());
+    double lowest  = *std::min_element(stoch_lows_.begin(),  stoch_lows_.end());
+
+    stoch_k_ = (highest == lowest) ? 50.0 :
+               100.0 * (close - lowest) / (highest - lowest);
+
+    stoch_k_history_.push_back(stoch_k_);
+    if (stoch_k_history_.size() > d_period) stoch_k_history_.pop_front();
+
+    // %D = simple average of last d_period %K values
+    double sum_k = 0.0;
+    for (double k : stoch_k_history_) sum_k += k;
+    stoch_d_ = sum_k / stoch_k_history_.size();
+}
+
+double Indicators::getStochasticK() const { return stoch_k_; }
+double Indicators::getStochasticD() const { return stoch_d_; }
+
+bool Indicators::isStochasticOversold(double threshold) const {
+    return stoch_k_ < threshold && stoch_d_ < threshold;
+}
+
+bool Indicators::isStochasticOverbought(double threshold) const {
+    return stoch_k_ > threshold && stoch_d_ > threshold;
+}
+
 void Indicators::updateBollingerBands(double price, std::size_t period, double std_dev_mult) {
     bb_period_ = period;
     bb_std_dev_mult_ = std_dev_mult;
@@ -347,6 +382,11 @@ void Indicators::reset() {
     rsi_states_.clear();
     atr_states_.clear();
     bb_price_history_.clear();
+    stoch_highs_.clear();
+    stoch_lows_.clear();
+    stoch_k_history_.clear();
+    stoch_k_ = 50.0;
+    stoch_d_ = 50.0;
     bb_upper_ = 0.0;
     bb_middle_ = 0.0;
     bb_lower_ = 0.0;

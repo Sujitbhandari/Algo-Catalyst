@@ -56,6 +56,14 @@ public:
     double getATR(std::size_t period = 14) const;
     double getATRPercent(double price, std::size_t period = 14) const;  // ATR / price * 100
 
+    // Stochastic Oscillator %K and %D
+    void updateStochastic(double high, double low, double close,
+                          std::size_t k_period = 14, std::size_t d_period = 3);
+    double getStochasticK() const;
+    double getStochasticD() const;
+    bool isStochasticOversold(double threshold = 20.0) const;
+    bool isStochasticOverbought(double threshold = 80.0) const;
+
     // Price metrics
     void updatePrice(double price);
     double getGapUpPercent() const;  // Percent change from open price
@@ -103,6 +111,13 @@ private:
         std::size_t tick_count;
     };
     std::map<std::size_t, ATRState> atr_states_;
+
+    // Stochastic components
+    std::deque<double> stoch_highs_;
+    std::deque<double> stoch_lows_;
+    std::deque<double> stoch_k_history_;
+    double stoch_k_ = 50.0;
+    double stoch_d_ = 50.0;
 
     // VWAP components
     double cumulative_price_volume_;
