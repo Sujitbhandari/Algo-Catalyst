@@ -1,142 +1,231 @@
 #!/usr/bin/env python3
+"""
+Algo-Catalyst Synthetic Data Generator
+Produces realistic intraday tick data with configurable market scenarios.
 
+Scenarios:
+  catalyst  – news-driven gap-up breakout (default)
+  meanrev   – choppy, mean-reverting session
+  trending  – slow steady trend without a catalyst
+  volatile  – high-volatility session with whipsaw moves
+"""
+
+import argparse
 import csv
 import random
+import math
 from pathlib import Path
 
-def generate_synthetic_catalyst_data(output_file='data/synthetic_catalyst.csv', num_ticks=10000):
-    """
-    Generate synthetic tick data that simulates a news catalyst breakout.
-    
-    Scenario:
-    - Ticks 0-1000: Choppy/Flat market (Price ~$10.00)
-    - Ticks 1001-5000: The Catalyst - Gap up, volume spike, trending up
-    - Ticks 5001-10000: Continue trend with some volatility
-    """
-    Path('data').mkdir(exist_ok=True)
-    
-    base_timestamp = 1609459200000000
-    timestamps = []
-    prices = []
-    volumes = []
-    bid_sizes = []
-    ask_sizes = []
-    
-    base_price = 10.00
-    base_volume = 1000
-    normal_bid_size = 5000
-    normal_ask_size = 5000
-    
-    # Phase 1: Choppy/Flat market (Ticks 0-1000)
-    print("Generating Phase 1: Choppy market (0-1000 ticks)...")
-    current_price = base_price
-    for i in range(1000):
-        timestamp = base_timestamp + (i * 1000000)
-        
-        # Slight random walk around $10.00
-        price_change = random.uniform(-0.05, 0.05)
-        current_price = max(9.90, min(10.10, current_price + price_change))
-        
-        volume = random.randint(800, 1200)
-        bid_size = random.randint(4500, 5500)
-        ask_size = random.randint(4500, 5500)
-        
-        timestamps.append(timestamp)
-        prices.append(round(current_price, 2))
-        volumes.append(volume)
-        bid_sizes.append(bid_size)
-        ask_sizes.append(ask_size)
-    
-    # Phase 2: The Catalyst - Gap up and breakout (Ticks 1001-5000)
-    print("Generating Phase 2: News catalyst breakout (1001-5000 ticks)...")
-    
-    # Calculate average volume for spike calculation
-    avg_volume_phase1 = sum(volumes[-20:]) / 20
-    
-    # Gap up to $11.10+ (ensures >10% gap from previous close ~$10.00)
-    previous_close = prices[-1]
-    gap_target = previous_close * 1.11  # 11% gap to ensure >10% requirement
-    current_price = round(gap_target, 2)
-    
-    for i in range(1000, 5000):
-        timestamp = base_timestamp + (i * 1000000)
-        
-        if i == 1000:
-            # Initial gap up - massive volume spike (10x)
-            volume = int(avg_volume_phase1 * 10)
-            current_price = 11.00
-        elif i < 1500:
-            # Early catalyst phase - high volume, trending up
-            volume = random.randint(int(avg_volume_phase1 * 8), int(avg_volume_phase1 * 12))
-            price_change = random.uniform(0.01, 0.08)
-            current_price = min(12.00, current_price + price_change)
-        elif i < 3000:
-            # Mid-trend - continued momentum
-            volume = random.randint(int(avg_volume_phase1 * 5), int(avg_volume_phase1 * 8))
-            price_change = random.uniform(0.005, 0.05)
-            current_price = min(14.00, current_price + price_change)
+
+# ─── Base tick generator ──────────────────────────────────────────────────────
+
+def _gbm_step(price: float, mu: float, sigma: float, dt: float = 1.0) -> float:
+    """One Geometric Brownian Motion step."""
+    z = random.gauss(0, 1)
+    return price * math.exp((mu - 0.5 * sigma**2) * dt + sigma * math.sqrt(dt) * z)
+
+
+def _volume_burst(base_vol: int, multiplier: float, noise: float = 0.3) -> int:
+    vol = int(base_vol * multiplier * random.uniform(1 - noise, 1 + noise))
+    return max(1, vol)
+
+
+def _bid_ask(volume: int, pressure: float) -> tuple[int, int]:
+    """Return (bid_size, ask_size) given order flow pressure in [-1, 1]."""
+    total = volume * 5
+    bid = int(total * (0.5 + pressure * 0.4))
+    ask = total - bid
+    return max(1, bid), max(1, ask)
+
+
+# ─── Scenario generators ──────────────────────────────────────────────────────
+
+def _phase_choppy(n: int, start_price: float, base_vol: int,
+                  ts_start: int, ts_step: int) -> list[dict]:
+    ticks = []
+    price = start_price
+    for i in range(n):
+        price = max(price * 0.98, min(price * 1.02,
+                    _gbm_step(price, mu=0.0, sigma=0.005)))
+        vol   = _volume_burst(base_vol, multiplier=1.0, noise=0.4)
+        bid, ask = _bid_ask(vol, pressure=random.uniform(-0.1, 0.1))
+        ticks.append({
+            "ts": ts_start + i * ts_step,
+            "price": round(price, 4),
+            "vol": vol,
+            "bid": bid,
+            "ask": ask,
+            "high": round(price * random.uniform(1.0, 1.003), 4),
+            "low":  round(price * random.uniform(0.997, 1.0), 4),
+        })
+    return ticks
+
+
+def _phase_catalyst(n: int, start_price: float, base_vol: int,
+                    ts_start: int, ts_step: int,
+                    gap_pct: float = 0.12) -> list[dict]:
+    ticks = []
+    price = start_price * (1 + gap_pct)  # gap up
+    ramp_ticks = n // 3
+
+    for i in range(n):
+        if i < ramp_ticks:
+            # Strong uptrend, massive volume, high buying pressure
+            mu = 0.04
+            sigma = 0.015
+            vol_mult = random.uniform(8, 14)
+            pressure = random.uniform(0.3, 0.6)
+        elif i < 2 * ramp_ticks:
+            # Mid-trend: slowing but still bullish
+            mu = 0.015
+            sigma = 0.012
+            vol_mult = random.uniform(4, 8)
+            pressure = random.uniform(0.1, 0.4)
         else:
-            # Late trend - strong momentum toward $15
-            volume = random.randint(int(avg_volume_phase1 * 3), int(avg_volume_phase1 * 6))
-            price_change = random.uniform(0.002, 0.03)
-            current_price = min(15.00, current_price + price_change)
-        
-        # Bid/Ask ratio 2.0 (buying pressure)
-        bid_size = int(volume * 5)
-        ask_size = int(bid_size / 2.0)
-        
-        timestamps.append(timestamp)
-        prices.append(round(current_price, 2))
-        volumes.append(volume)
-        bid_sizes.append(bid_size)
-        ask_sizes.append(ask_size)
-    
-    # Phase 3: Continue with trend and volatility (Ticks 5001-10000)
-    print("Generating Phase 3: Extended trend (5001-10000 ticks)...")
-    target_price = 15.50
-    
-    for i in range(5000, num_ticks):
-        timestamp = base_timestamp + (i * 1000000)
-        
-        # Gradually move toward target with some volatility
-        price_diff = target_price - current_price
-        price_change = random.uniform(0, price_diff * 0.02) + random.uniform(-0.10, 0.10)
-        current_price = max(14.00, min(target_price, current_price + price_change))
-        
-        # Volume decreases but stays elevated
-        volume = random.randint(int(avg_volume_phase1 * 2), int(avg_volume_phase1 * 4))
-        
-        # Maintain buying pressure but reduce ratio
-        bid_size = int(volume * 5)
-        ask_size = int(bid_size / 1.8)
-        
-        timestamps.append(timestamp)
-        prices.append(round(current_price, 2))
-        volumes.append(volume)
-        bid_sizes.append(bid_size)
-        ask_sizes.append(ask_size)
-    
-    # Write to CSV
-    print(f"Writing {len(timestamps)} ticks to {output_file}...")
-    with open(output_file, 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
-        writer.writerow(['Timestamp', 'Price', 'Volume', 'Bid_Size', 'Ask_Size'])
-        
-        for i in range(len(timestamps)):
-            writer.writerow([
-                timestamps[i],
-                prices[i],
-                volumes[i],
-                bid_sizes[i],
-                ask_sizes[i]
-            ])
-    
-    print(f"Successfully generated {len(timestamps)} ticks!")
-    print(f"Price range: ${min(prices):.2f} - ${max(prices):.2f}")
-    print(f"Volume range: {min(volumes)} - {max(volumes)}")
-    print(f"Gap up at tick 1000: ${prices[999]:.2f} -> ${prices[1000]:.2f} ({(prices[1000]/prices[999]-1)*100:.2f}%)")
-    print(f"Volume spike at tick 1000: {volumes[999]} -> {volumes[1000]} ({volumes[1000]/avg_volume_phase1:.2f}x)")
+            # Late trend: consolidation with slight drift up
+            mu = 0.005
+            sigma = 0.010
+            vol_mult = random.uniform(2, 5)
+            pressure = random.uniform(-0.1, 0.25)
 
-if __name__ == '__main__':
-    generate_synthetic_catalyst_data()
+        price = _gbm_step(price, mu=mu, sigma=sigma)
+        vol   = _volume_burst(base_vol, vol_mult)
+        bid, ask = _bid_ask(vol, pressure=pressure)
+        ticks.append({
+            "ts": ts_start + i * ts_step,
+            "price": round(price, 4),
+            "vol": vol,
+            "bid": bid,
+            "ask": ask,
+            "high": round(price * random.uniform(1.0, 1.005), 4),
+            "low":  round(price * random.uniform(0.995, 1.0), 4),
+        })
+    return ticks
 
+
+def _phase_trending(n: int, start_price: float, base_vol: int,
+                    ts_start: int, ts_step: int, direction: float = 1.0) -> list[dict]:
+    ticks = []
+    price = start_price
+    mu = 0.008 * direction
+    for i in range(n):
+        price = _gbm_step(price, mu=mu, sigma=0.008)
+        vol   = _volume_burst(base_vol, multiplier=1.5, noise=0.3)
+        bid, ask = _bid_ask(vol, pressure=0.15 * direction)
+        ticks.append({
+            "ts": ts_start + i * ts_step,
+            "price": round(price, 4),
+            "vol": vol,
+            "bid": bid,
+            "ask": ask,
+            "high": round(price * random.uniform(1.0, 1.004), 4),
+            "low":  round(price * random.uniform(0.996, 1.0), 4),
+        })
+    return ticks
+
+
+def _phase_volatile(n: int, start_price: float, base_vol: int,
+                    ts_start: int, ts_step: int) -> list[dict]:
+    ticks = []
+    price = start_price
+    for i in range(n):
+        price = _gbm_step(price, mu=0.0, sigma=0.025)
+        vol   = _volume_burst(base_vol, multiplier=3.0, noise=0.6)
+        bid, ask = _bid_ask(vol, pressure=random.uniform(-0.4, 0.4))
+        ticks.append({
+            "ts": ts_start + i * ts_step,
+            "price": round(price, 4),
+            "vol": vol,
+            "bid": bid,
+            "ask": ask,
+            "high": round(price * random.uniform(1.0, 1.008), 4),
+            "low":  round(price * random.uniform(0.992, 1.0), 4),
+        })
+    return ticks
+
+
+# ─── Scenario builders ────────────────────────────────────────────────────────
+
+def build_catalyst(n: int = 10_000, seed: int = 42) -> list[dict]:
+    random.seed(seed)
+    base_ts   = 1_609_459_200_000_000  # 2021-01-01 00:00:00 UTC (us)
+    ts_step   = 1_000_000              # 1 second per tick
+    base_vol  = 1_000
+    base_price = 10.00
+
+    choppy  = _phase_choppy  (n // 10,       base_price,  base_vol, base_ts,                          ts_step)
+    cat     = _phase_catalyst(n * 4 // 10,   base_price,  base_vol, base_ts + len(choppy) * ts_step,  ts_step)
+    trend   = _phase_trending(n - len(choppy) - len(cat), cat[-1]["price"], base_vol,
+                               base_ts + (len(choppy) + len(cat)) * ts_step, ts_step)
+    return choppy + cat + trend
+
+
+def build_meanrev(n: int = 10_000, seed: int = 42) -> list[dict]:
+    random.seed(seed)
+    base_ts  = 1_609_459_200_000_000
+    return _phase_choppy(n, 25.00, 2_000, base_ts, 500_000)
+
+
+def build_trending(n: int = 10_000, seed: int = 42) -> list[dict]:
+    random.seed(seed)
+    base_ts = 1_609_459_200_000_000
+    return _phase_trending(n, 50.00, 3_000, base_ts, 500_000, direction=1.0)
+
+
+def build_volatile(n: int = 10_000, seed: int = 42) -> list[dict]:
+    random.seed(seed)
+    base_ts = 1_609_459_200_000_000
+    return _phase_volatile(n, 20.00, 5_000, base_ts, 250_000)
+
+
+SCENARIOS = {
+    "catalyst": build_catalyst,
+    "meanrev":  build_meanrev,
+    "trending": build_trending,
+    "volatile": build_volatile,
+}
+
+
+# ─── Writer ───────────────────────────────────────────────────────────────────
+
+def write_csv(ticks: list[dict], output_path: str) -> None:
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Timestamp", "Price", "Volume", "Bid_Size", "Ask_Size", "High", "Low"])
+        for t in ticks:
+            writer.writerow([t["ts"], t["price"], t["vol"], t["bid"], t["ask"], t["high"], t["low"]])
+
+    prices = [t["price"] for t in ticks]
+    vols   = [t["vol"]   for t in ticks]
+    print(f"[OK] Wrote {len(ticks)} ticks → {output_path}")
+    print(f"     Price range : ${min(prices):.4f} – ${max(prices):.4f}")
+    print(f"     Volume range: {min(vols)} – {max(vols)}")
+
+
+# ─── CLI ─────────────────────────────────────────────────────────────────────
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Algo-Catalyst synthetic data generator")
+    parser.add_argument("--scenario", choices=list(SCENARIOS), default="catalyst",
+                        help="Market scenario to simulate (default: catalyst)")
+    parser.add_argument("--ticks",  type=int, default=10_000,
+                        help="Number of ticks to generate (default: 10000)")
+    parser.add_argument("--seed",   type=int, default=42, help="RNG seed")
+    parser.add_argument("--output", default=None,
+                        help="Output CSV path (default: data/<scenario>.csv)")
+    args = parser.parse_args()
+
+    output = args.output or f"data/{args.scenario}.csv"
+    print(f"Generating '{args.scenario}' scenario: {args.ticks} ticks (seed={args.seed})…")
+
+    ticks = SCENARIOS[args.scenario](n=args.ticks, seed=args.seed)
+    write_csv(ticks, output)
+
+    # Also write as the canonical tick_data.csv so the engine picks it up by default
+    if args.scenario == "catalyst" and args.output is None:
+        write_csv(ticks, "data/synthetic_catalyst.csv")
+
+
+if __name__ == "__main__":
+    main()
