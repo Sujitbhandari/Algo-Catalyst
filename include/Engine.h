@@ -38,6 +38,11 @@ public:
     void setCommissionPerShare(double commission) { commission_per_share_ = commission; }
     void setMinCommission(double min_comm) { min_commission_ = min_comm; }
     
+    // Risk management
+    void setMaxDrawdownLimit(double max_dd) { max_drawdown_limit_ = max_dd; }
+    void setMaxDailyLoss(double max_loss)   { max_daily_loss_ = max_loss; }
+    bool isHaltedByRisk() const             { return risk_halt_; }
+    
     // Load tick data from CSV
     bool loadTickData(const std::string& csv_path, const std::string& symbol);
     
@@ -111,9 +116,14 @@ private:
     std::vector<TradeRecord> trade_log_;
     
     double latency_ms_;
-    double slippage_bps_ = 5.0;       // 0.5 bps default slippage
-    double commission_per_share_ = 0.005; // $0.005 per share
-    double min_commission_ = 1.0;         // $1.00 minimum commission
+    double slippage_bps_ = 5.0;
+    double commission_per_share_ = 0.005;
+    double min_commission_ = 1.0;
+    double max_drawdown_limit_ = -1.0;  // -1 = disabled
+    double max_daily_loss_ = -1.0;      // -1 = disabled
+    bool risk_halt_ = false;
+    double peak_equity_ = 0.0;
+    double daily_pnl_ = 0.0;
     std::int64_t current_time_us_;
 };
 

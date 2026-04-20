@@ -141,8 +141,8 @@ void Backtester::processMarketUpdate(std::unique_ptr<MarketUpdateEvent> event) {
         }
     }
     
-    // Process with strategy
-    if (!event_symbol.empty() && strategies_.find(event_symbol) != strategies_.end()) {
+    // Process with strategy (skip if risk circuit breaker is active)
+    if (!event_symbol.empty() && strategies_.find(event_symbol) != strategies_.end() && !risk_halt_) {
         auto signals = strategies_[event_symbol]->processMarketUpdate(*event);
         
         // Add signal events to queue
@@ -306,7 +306,23 @@ void Backtester::closePosition(const std::string& symbol, double exit_price, std
     trade.strategy_name = position.strategy_name;
     
     trade_log_.push_back(trade);
-    
+
+    // Risk circuit breaker checks
+    double current_equity = getTotalPnL();
+    if (current_equity > peak_equity_) peak_equity_ = current_equity;
+    daily_pnl_ += trade.pnl;
+
+    if (max_drawdown_limit_ > 0.0 && (peak_equity_ - current_equity) >= max_drawdown_limit_) {
+        std::cerr << "[RISK] Max drawdown limit $" << max_drawdown_limit_
+                  << " reached — halting new entries.\n";
+        risk_halt_ = true;
+    }
+    if (max_daily_loss_ > 0.0 && daily_pnl_ <= -max_daily_loss_) {
+        std::cerr << "[RISK] Daily loss limit $" << max_daily_loss_
+                  << " reached — halting new entries.\n";
+        risk_halt_ = true;
+    }
+
     position.quantity = 0.0;
     position.avg_price = 0.0;
     position.total_commission = 0.0;
