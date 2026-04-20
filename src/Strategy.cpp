@@ -96,8 +96,8 @@ bool NewsMomentumStrategy::checkEntryConditions(const Tick& tick) {
         return false;
     }
     
-    // Regime check - only trade in TRENDING regime
-    if (regime_classifier_ && 
+    // Only trade in TRENDING regime; avoid CHOPPY and VOLATILE
+    if (regime_classifier_ &&
         regime_classifier_->getCurrentRegime() != RegimeClassifier::Regime::TRENDING) {
         return false;
     }
@@ -146,10 +146,13 @@ bool NewsMomentumStrategy::checkExitConditions(const Tick& tick) {
         return true;
     }
     
-    // Exit if regime switches to CHOPPY
-    if (regime_classifier_ && 
-        regime_classifier_->getCurrentRegime() == RegimeClassifier::Regime::CHOPPY) {
-        return true;
+    // Exit if regime turns unfavorable (CHOPPY or VOLATILE)
+    if (regime_classifier_) {
+        auto r = regime_classifier_->getCurrentRegime();
+        if (r == RegimeClassifier::Regime::CHOPPY ||
+            r == RegimeClassifier::Regime::VOLATILE) {
+            return true;
+        }
     }
     
     return false;

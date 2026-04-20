@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "Strategy.h"
 #include "AI_Regime.h"
+#include "Version.h"
 #include <fstream>
 #include <sstream>
 #include <iostream>
