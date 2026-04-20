@@ -163,11 +163,21 @@ bool Indicators::isOverbought(std::size_t period, double threshold) const {
 }
 
 void Indicators::updateVWAP(double price, std::int64_t volume, std::int64_t timestamp_us) {
-    // Reset VWAP at start of new session (first tick or new day)
+    // Reset VWAP at start of new session or when crossing midnight boundary
     if (vwap_session_start_us_ == 0) {
         vwap_session_start_us_ = timestamp_us;
         cumulative_price_volume_ = 0.0;
         cumulative_volume_ = 0;
+    } else {
+        // Detect new trading day: check if the date portion of the timestamp changed
+        // Timestamps are microseconds since epoch; one day = 86400 * 1e6 us
+        constexpr std::int64_t US_PER_DAY = 86400LL * 1'000'000LL;
+        std::int64_t session_day = vwap_session_start_us_ / US_PER_DAY;
+        std::int64_t current_day = timestamp_us / US_PER_DAY;
+        if (current_day != session_day) {
+            resetVWAP();
+            vwap_session_start_us_ = timestamp_us;
+        }
     }
     
     // Update cumulative values
