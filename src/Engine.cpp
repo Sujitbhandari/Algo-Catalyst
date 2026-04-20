@@ -429,11 +429,22 @@ void Backtester::printTradeLog() const {
               << std::endl;
     std::cout << "----------------------------------------------------------------------------------------------------" << std::endl;
     
+    auto format_ts = [](std::int64_t ts_us) -> std::string {
+        std::time_t t = static_cast<std::time_t>(ts_us / 1'000'000LL);
+        int frac_us = static_cast<int>(ts_us % 1'000'000LL);
+        std::tm* tm_info = std::localtime(&t);
+        if (!tm_info) return std::to_string(ts_us);
+        char buf[32];
+        std::strftime(buf, sizeof(buf), "%H:%M:%S", tm_info);
+        char result[48];
+        std::snprintf(result, sizeof(result), "%s.%06d", buf, frac_us);
+        return std::string(result);
+    };
+
     // Print trades
     for (const auto& trade : trade_log_) {
-        // Format timestamps (simplified)
-        std::string entry_time = std::to_string(trade.entry_timestamp_us);
-        std::string exit_time = std::to_string(trade.exit_timestamp_us);
+        std::string entry_time = format_ts(trade.entry_timestamp_us);
+        std::string exit_time  = format_ts(trade.exit_timestamp_us);
         
         std::cout << std::left << std::setw(15) << trade.symbol
                   << std::setw(20) << entry_time
@@ -459,17 +470,20 @@ bool Backtester::exportTradeLogToCSV(const std::string& filepath) const {
         return false;
     }
     
-    file << "Entry_Time,Exit_Time,Symbol,Entry_Price,Exit_Price,Quantity,PnL,Regime\n";
-    
+    file << "Entry_Time_US,Exit_Time_US,Symbol,Entry_Price,Exit_Price,"
+         << "Quantity,PnL,Commission,Regime,Strategy\n";
+
     for (const auto& trade : trade_log_) {
         file << trade.entry_timestamp_us << ","
              << trade.exit_timestamp_us << ","
              << trade.symbol << ","
-             << std::fixed << std::setprecision(2) << trade.entry_price << ","
+             << std::fixed << std::setprecision(4) << trade.entry_price << ","
              << trade.exit_price << ","
              << trade.quantity << ","
-             << trade.pnl << ","
-             << trade.regime << "\n";
+             << std::setprecision(2) << trade.pnl << ","
+             << trade.commission << ","
+             << trade.regime << ","
+             << trade.strategy_name << "\n";
     }
     
     file.close();
