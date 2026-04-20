@@ -530,14 +530,56 @@ std::vector<Tick> TickLoader::loadFromCSV(const std::string& filepath) {
 }
 
 std::int64_t TickLoader::parseTimestamp(const std::string& ts_str) {
-    // Try parsing as microseconds timestamp (integer)
+    if (ts_str.empty()) return 0;
+
+    // Try integer microseconds first (fastest path)
     try {
-        return std::stoll(ts_str);
-    } catch (...) {
-        // If not integer, try parsing as ISO 8601 or other formats
-        // Simplified: assume it's microseconds if it's a number
-        return 0;
+        bool all_digits = true;
+        for (char c : ts_str) {
+            if (!std::isdigit(c)) { all_digits = false; break; }
+        }
+        if (all_digits) return std::stoll(ts_str);
+    } catch (...) {}
+
+    // Try ISO 8601 format: YYYY-MM-DDTHH:MM:SS[.ffffff][Z]
+    // e.g., "2024-01-15T09:30:00.123456"
+    std::tm tm = {};
+    int microseconds = 0;
+    const char* fmt_full  = "%Y-%m-%dT%H:%M:%S";
+    const char* fmt_space = "%Y-%m-%d %H:%M:%S";
+
+    char* parsed = nullptr;
+    for (const char* fmt : {fmt_full, fmt_space}) {
+        std::string stripped = ts_str;
+        // strip trailing Z
+        if (!stripped.empty() && stripped.back() == 'Z') stripped.pop_back();
+
+        parsed = strptime(stripped.c_str(), fmt, &tm);
+        if (parsed) {
+            // parse optional fractional seconds
+            if (*parsed == '.' || *parsed == ',') {
+                ++parsed;
+                int frac = 0, digits = 0;
+                while (*parsed && std::isdigit(*parsed) && digits < 6) {
+                    frac = frac * 10 + (*parsed - '0');
+                    ++parsed;
+                    ++digits;
+                }
+                // pad to 6 digits
+                while (digits++ < 6) frac *= 10;
+                microseconds = frac;
+            }
+            break;
+        }
     }
+
+    if (!parsed) return 0;
+
+    tm.tm_isdst = -1;
+    std::time_t epoch_sec = std::mktime(&tm);
+    if (epoch_sec == -1) return 0;
+
+    return static_cast<std::int64_t>(epoch_sec) * 1'000'000LL + microseconds;
 }
 
 } // namespace AlgoCatalyst
