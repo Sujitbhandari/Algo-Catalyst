@@ -236,8 +236,10 @@ void Indicators::updatePrice(double price) {
 }
 
 double Indicators::getGapUpPercent() const {
-    if (prev_close_ == 0.0) return 0.0;
-    return ((current_price_ - prev_close_) / prev_close_) * 100.0;
+    // Gap is measured from the session open price vs previous close
+    // For intraday data where we lack a true prev_close, use open_price_ as the reference
+    if (open_price_ == 0.0) return 0.0;
+    return ((current_price_ - open_price_) / open_price_) * 100.0;
 }
 
 void Indicators::updateATR(double high, double low, double close, std::size_t period) {
