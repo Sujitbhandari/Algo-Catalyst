@@ -44,6 +44,8 @@ public:
     void setMinGapUpPercent(double percent) { min_gap_up_percent_ = percent; }
     void setMinBidAskRatio(double ratio) { min_bid_ask_ratio_ = ratio; }
     void setBasePositionSize(double size) { base_position_size_ = size; }
+    void setStopLossPercent(double pct) { stop_loss_pct_ = pct; }
+    void setTakeProfitPercent(double pct) { take_profit_pct_ = pct; }
     
 private:
     // Check if all entry conditions are met
@@ -71,10 +73,13 @@ private:
     double min_gap_up_percent_ = 10.0;
     double min_bid_ask_ratio_ = 1.5;
     double base_position_size_ = 100.0;
+    double stop_loss_pct_ = 2.0;    // 2% stop loss
+    double take_profit_pct_ = 6.0;  // 6% take profit (3:1 R/R)
     
     // State tracking
     bool was_long_ema_above_short_ = false;
     std::int64_t entry_timestamp_us_ = 0;
+    double entry_price_ = 0.0;
 };
 
 } // namespace AlgoCatalyst

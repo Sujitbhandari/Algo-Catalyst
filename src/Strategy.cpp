@@ -58,6 +58,7 @@ std::vector<EventPtr> NewsMomentumStrategy::processMarketUpdate(const MarketUpda
                 position_size, tick.price));
             
             entry_timestamp_us_ = timestamp_us;
+            entry_price_ = tick.price;
         }
     }
     
@@ -104,18 +105,30 @@ bool NewsMomentumStrategy::checkEntryConditions(const Tick& tick) {
 }
 
 bool NewsMomentumStrategy::checkExitConditions(const Tick& tick) {
+    // Hard stop-loss: exit if loss exceeds stop_loss_pct_
+    if (entry_price_ > 0.0 && stop_loss_pct_ > 0.0) {
+        double loss_pct = ((entry_price_ - tick.price) / entry_price_) * 100.0;
+        if (loss_pct >= stop_loss_pct_) {
+            return true;
+        }
+    }
+
+    // Hard take-profit: exit if gain exceeds take_profit_pct_
+    if (entry_price_ > 0.0 && take_profit_pct_ > 0.0) {
+        double gain_pct = ((tick.price - entry_price_) / entry_price_) * 100.0;
+        if (gain_pct >= take_profit_pct_) {
+            return true;
+        }
+    }
+
     // Exit if price drops below VWAP
     if (!indicators_.isPriceAboveVWAP(tick.price)) {
         return true;
     }
     
-    // Exit if MACD histogram starts contracting
-    if (!indicators_.isMACDHistogramExpanding()) {
-        // Check if histogram has been negative for a while
-        // Simplified: exit if histogram is negative
-        if (indicators_.getMACDHistogram() < 0) {
-            return true;
-        }
+    // Exit if MACD histogram starts contracting and is negative
+    if (!indicators_.isMACDHistogramExpanding() && indicators_.getMACDHistogram() < 0) {
+        return true;
     }
     
     // Exit if regime switches to CHOPPY
