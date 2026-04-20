@@ -39,9 +39,11 @@ void Backtester::registerStrategy(const std::string& symbol, std::unique_ptr<Str
 }
 
 void Backtester::run() {
-    std::cout << "Starting backtest..." << std::endl;
-    std::cout << "Latency: " << latency_ms_ << " ms" << std::endl;
-    std::cout << "Processing " << event_queue_.size() << " events..." << std::endl;
+    std::cout << "Starting backtest...\n"
+              << "Latency:    " << latency_ms_ << " ms\n"
+              << "Slippage:   " << slippage_bps_ << " bps\n"
+              << "Commission: $" << commission_per_share_ << "/share (min $" << min_commission_ << ")\n"
+              << "Processing " << event_queue_.size() << " events...\n";
     
     auto start_time = std::chrono::high_resolution_clock::now();
     std::size_t events_processed = 0;
