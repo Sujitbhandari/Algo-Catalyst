@@ -1,40 +1,55 @@
-# Build directories
+# ─── Build artifacts ──────────────────────────────────────────────────────────
 build/
 cmake-build-*/
 *.o
 *.a
 *.so
 *.dylib
+*.dSYM/
+compile_commands.json
 
-# Executables
+# ─── Executables ──────────────────────────────────────────────────────────────
 AlgoCatalyst
 AlgoCatalyst.exe
 
-# IDE files
+# ─── IDE / editor ─────────────────────────────────────────────────────────────
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.cursor/
 
-# CMake
+# ─── CMake ────────────────────────────────────────────────────────────────────
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
+_deps/
 
-# macOS
+# ─── macOS ────────────────────────────────────────────────────────────────────
 .DS_Store
+.AppleDouble
+.LSOverride
 
-# Python virtual environment
+# ─── Python ───────────────────────────────────────────────────────────────────
 venv/
+.venv/
 env/
 *.pyc
 __pycache__/
+*.egg-info/
+dist/
+*.pyo
+.ruff_cache/
+.mypy_cache/
 
-# Generated plots (keep docs/images in repo)
+# ─── Generated output (not for VCS) ──────────────────────────────────────────
 performance_plot.png
+trades.csv
+test_trades.csv
 
-# Logs
+# ─── Logs ─────────────────────────────────────────────────────────────────────
 *.log
+logs/
 
