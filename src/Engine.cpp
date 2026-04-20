@@ -315,6 +315,95 @@ double Backtester::getTotalPnL() const {
     return total;
 }
 
+double Backtester::getWinRate() const {
+    if (trade_log_.empty()) return 0.0;
+    int wins = 0;
+    for (const auto& trade : trade_log_) {
+        if (trade.pnl > 0.0) wins++;
+    }
+    return static_cast<double>(wins) / trade_log_.size() * 100.0;
+}
+
+double Backtester::getAverageWin() const {
+    double total = 0.0;
+    int count = 0;
+    for (const auto& trade : trade_log_) {
+        if (trade.pnl > 0.0) { total += trade.pnl; count++; }
+    }
+    return count > 0 ? total / count : 0.0;
+}
+
+double Backtester::getAverageLoss() const {
+    double total = 0.0;
+    int count = 0;
+    for (const auto& trade : trade_log_) {
+        if (trade.pnl < 0.0) { total += trade.pnl; count++; }
+    }
+    return count > 0 ? total / count : 0.0;
+}
+
+double Backtester::getProfitFactor() const {
+    double gross_profit = 0.0;
+    double gross_loss = 0.0;
+    for (const auto& trade : trade_log_) {
+        if (trade.pnl > 0.0) gross_profit += trade.pnl;
+        else gross_loss += std::abs(trade.pnl);
+    }
+    return gross_loss > 0.0 ? gross_profit / gross_loss : 0.0;
+}
+
+double Backtester::getSharpeRatio(double risk_free_rate) const {
+    if (trade_log_.size() < 2) return 0.0;
+
+    std::vector<double> returns;
+    returns.reserve(trade_log_.size());
+    for (const auto& trade : trade_log_) {
+        returns.push_back(trade.pnl);
+    }
+
+    double mean = std::accumulate(returns.begin(), returns.end(), 0.0) / returns.size();
+    double variance = 0.0;
+    for (double r : returns) {
+        double diff = r - mean;
+        variance += diff * diff;
+    }
+    variance /= (returns.size() - 1);
+    double std_dev = std::sqrt(variance);
+
+    if (std_dev == 0.0) return 0.0;
+    return (mean - risk_free_rate) / std_dev;
+}
+
+double Backtester::getMaxDrawdown() const {
+    if (trade_log_.empty()) return 0.0;
+
+    double peak = 0.0;
+    double equity = 0.0;
+    double max_dd = 0.0;
+
+    for (const auto& trade : trade_log_) {
+        equity += trade.pnl;
+        if (equity > peak) peak = equity;
+        double drawdown = peak - equity;
+        if (drawdown > max_dd) max_dd = drawdown;
+    }
+    return max_dd;
+}
+
+void Backtester::printPerformanceSummary() const {
+    std::cout << "\n========== PERFORMANCE SUMMARY ==========\n";
+    std::cout << std::fixed << std::setprecision(2);
+    std::cout << "Total Trades:    " << getNumTrades() << "\n";
+    std::cout << "Total PnL:       $" << getTotalPnL() << "\n";
+    std::cout << "Win Rate:        " << getWinRate() << "%\n";
+    std::cout << "Profit Factor:   " << getProfitFactor() << "\n";
+    std::cout << "Avg Win:         $" << getAverageWin() << "\n";
+    std::cout << "Avg Loss:        $" << getAverageLoss() << "\n";
+    std::cout << "Max Drawdown:    $" << getMaxDrawdown() << "\n";
+    std::cout << "Sharpe Ratio:    " << getSharpeRatio() << "\n";
+    std::cout << "=========================================\n";
+}
+
 void Backtester::printTradeLog() const {
     std::cout << "\nTRADE LOG" << std::endl;
     

@@ -51,9 +51,16 @@ public:
     // Performance metrics
     double getTotalPnL() const;
     int getNumTrades() const { return static_cast<int>(trade_log_.size()); }
+    double getWinRate() const;
+    double getSharpeRatio(double risk_free_rate = 0.0) const;
+    double getMaxDrawdown() const;
+    double getProfitFactor() const;
+    double getAverageWin() const;
+    double getAverageLoss() const;
     
     // Print trade log
     void printTradeLog() const;
+    void printPerformanceSummary() const;
     
     // Export trade log to CSV
     bool exportTradeLogToCSV(const std::string& filepath) const;
