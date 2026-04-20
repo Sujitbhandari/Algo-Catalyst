@@ -48,38 +48,40 @@ bool Indicators::isPriceAboveEMA(double price, std::size_t period) const {
 }
 
 void Indicators::updateMACD(double price) {
-    // Update 12-period EMA
-    if (ema_12_ == 0.0) {
+    macd_tick_count_++;
+
+    // SMA warm-up for 12-EMA
+    if (macd_tick_count_ == 1) {
         ema_12_ = price;
-    } else {
+        ema_26_ = price;
+    } else if (macd_tick_count_ <= 12) {
+        ema_12_ += (price - ema_12_) / macd_tick_count_;
+        ema_26_ += (price - ema_26_) / macd_tick_count_;
+    } else if (macd_tick_count_ <= 26) {
         double alpha_12 = 2.0 / (12.0 + 1.0);
         ema_12_ = alpha_12 * price + (1.0 - alpha_12) * ema_12_;
-    }
-    
-    // Update 26-period EMA
-    if (ema_26_ == 0.0) {
-        ema_26_ = price;
+        ema_26_ += (price - ema_26_) / macd_tick_count_;
     } else {
+        double alpha_12 = 2.0 / (12.0 + 1.0);
         double alpha_26 = 2.0 / (26.0 + 1.0);
+        ema_12_ = alpha_12 * price + (1.0 - alpha_12) * ema_12_;
         ema_26_ = alpha_26 * price + (1.0 - alpha_26) * ema_26_;
     }
-    
-    // Calculate MACD line
+
+    // Only compute signal / histogram after 26-tick warm-up
+    if (macd_tick_count_ < 26) return;
+
     double macd_line = ema_12_ - ema_26_;
-    
-    // Update signal line (9-period EMA of MACD line)
-    if (macd_signal_ema_9_ == 0.0) {
+
+    if (macd_tick_count_ == 26) {
         macd_signal_ema_9_ = macd_line;
     } else {
         double alpha_9 = 2.0 / (9.0 + 1.0);
         macd_signal_ema_9_ = alpha_9 * macd_line + (1.0 - alpha_9) * macd_signal_ema_9_;
     }
-    
-    // Store histogram
+
     double histogram = macd_line - macd_signal_ema_9_;
     macd_histogram_history_.push_back(histogram);
-    
-    // Keep only last 10 histograms for expansion check
     if (macd_histogram_history_.size() > 10) {
         macd_histogram_history_.pop_front();
     }
