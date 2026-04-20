@@ -1,6 +1,7 @@
 #include "Engine.h"
 #include "Strategy.h"
 #include "AI_Regime.h"
+#include "PerformanceAnalyzer.h"
 #include <iostream>
 #include <iomanip>
 #include <memory>
@@ -93,7 +94,10 @@ int main(int argc, char* argv[]) {
     std::cout << "\n";
     backtester.run();
 
-    backtester.printPerformanceSummary();
+    // Print detailed analytics via PerformanceAnalyzer
+    auto metrics = PerformanceAnalyzer::compute(backtester.getTradeLog());
+    PerformanceAnalyzer::print(metrics);
+
     backtester.exportTradeLogToCSV(output_file);
 
     return 0;
