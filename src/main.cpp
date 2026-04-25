@@ -31,6 +31,7 @@ int main(int argc, char* argv[]) {
     std::string csv_file = "data/tick_data.csv";
     std::string symbol = "TICKER";
     std::string output_file = "trades.csv";
+    std::string json_output_file;
     std::string strategy_name = "momentum";
     std::string config_file;
     double latency_ms = 200.0;
@@ -87,6 +88,8 @@ int main(int argc, char* argv[]) {
             slippage_bps = std::stod(argv[++i]);
         } else if (std::strcmp(argv[i], "--strategy") == 0 && i + 1 < argc) {
             strategy_name = argv[++i];
+        } else if (std::strcmp(argv[i], "--json-output") == 0 && i + 1 < argc) {
+            json_output_file = argv[++i];
         } else {
             // Legacy positional argument support
             if (i == 1) csv_file = argv[i];
@@ -149,6 +152,10 @@ int main(int argc, char* argv[]) {
     PerformanceAnalyzer::print(metrics);
 
     backtester.exportTradeLogToCSV(output_file);
+
+    if (!json_output_file.empty()) {
+        backtester.exportTradeLogToJSON(json_output_file);
+    }
 
     return 0;
 }
