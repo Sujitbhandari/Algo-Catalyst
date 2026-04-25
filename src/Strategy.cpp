@@ -35,6 +35,7 @@ std::vector<EventPtr> NewsMomentumStrategy::processMarketUpdate(const MarketUpda
     indicators_.updateMACD(tick.price);
     indicators_.updateVWAP(tick.price, tick.volume, timestamp_us);
     indicators_.updateVolume(tick.volume, timestamp_us);
+    indicators_.updateATR(tick.price, tick.price, tick.price, 14);
     
     // Check exit conditions first if in position
     if (hasPosition()) {
@@ -178,7 +179,15 @@ double NewsMomentumStrategy::calculatePositionSize() {
         kelly_mult = std::clamp(kelly * 0.5, 0.25, 2.0);
     }
 
-    return base_position_size_ * regime_mult * kelly_mult;
+    // ATR-based volatility scaling: reduce size when ATR% > 3%, increase when < 1%
+    double atr_mult = 1.0;
+    double atr_pct  = indicators_.getATRPercent(entry_price_ > 0.0 ? entry_price_ : 100.0, 14);
+    if (atr_pct > 0.0) {
+        // Inversely proportional: target 2% ATR as baseline
+        atr_mult = std::clamp(2.0 / atr_pct, 0.5, 1.5);
+    }
+
+    return base_position_size_ * regime_mult * kelly_mult * atr_mult;
 }
 
 void NewsMomentumStrategy::recordTrade(double pnl) {
