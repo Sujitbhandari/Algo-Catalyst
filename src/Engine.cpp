@@ -146,7 +146,18 @@ void Backtester::processMarketUpdate(std::unique_ptr<MarketUpdateEvent> event) {
     // Process with strategy (skip if risk circuit breaker is active)
     if (!event_symbol.empty() && strategies_.find(event_symbol) != strategies_.end() && !risk_halt_) {
         auto signals = strategies_[event_symbol]->processMarketUpdate(*event);
-        
+
+        // Update MAE/MFE for open positions on every tick
+        if (positions_.find(event_symbol) != positions_.end()) {
+            Position& pos = positions_[event_symbol];
+            if (pos.quantity != 0.0 && pos.avg_price > 0.0) {
+                const Tick& t = event->getTick();
+                double unrealized = (t.price - pos.avg_price) * pos.quantity;
+                pos.mfe = std::max(pos.mfe, unrealized);
+                pos.mae = std::min(pos.mae, unrealized);
+            }
+        }
+
         // Add signal events to queue
         for (auto& signal : signals) {
             event_queue_.push(std::move(signal));
@@ -306,6 +317,8 @@ void Backtester::closePosition(const std::string& symbol, double exit_price, std
     trade.commission = position.total_commission;
     trade.regime = position.entry_regime;
     trade.strategy_name = position.strategy_name;
+    trade.mae = position.mae;
+    trade.mfe = position.mfe;
     
     trade_log_.push_back(trade);
 
@@ -490,7 +503,7 @@ bool Backtester::exportTradeLogToCSV(const std::string& filepath) const {
     }
     
     file << "Entry_Time_US,Exit_Time_US,Symbol,Entry_Price,Exit_Price,"
-         << "Quantity,PnL,Commission,Regime,Strategy\n";
+         << "Quantity,PnL,Commission,Regime,Strategy,MAE,MFE\n";
 
     for (const auto& trade : trade_log_) {
         file << trade.entry_timestamp_us << ","
@@ -502,7 +515,9 @@ bool Backtester::exportTradeLogToCSV(const std::string& filepath) const {
              << std::setprecision(2) << trade.pnl << ","
              << trade.commission << ","
              << trade.regime << ","
-             << trade.strategy_name << "\n";
+             << trade.strategy_name << ","
+             << trade.mae << ","
+             << trade.mfe << "\n";
     }
     
     file.close();

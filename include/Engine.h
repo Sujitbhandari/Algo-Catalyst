@@ -26,6 +26,8 @@ struct TradeRecord {
     double commission;
     std::string regime;
     std::string strategy_name;
+    double mae = 0.0;  // Maximum Adverse Excursion (worst intraday loss from entry)
+    double mfe = 0.0;  // Maximum Favorable Excursion (best intraday gain from entry)
 };
 
     // Backtester Engine - Event-Driven Architecture
@@ -110,6 +112,8 @@ private:
         std::int64_t entry_timestamp_us;
         std::string entry_regime;
         std::string strategy_name;
+        double mae = 0.0;
+        double mfe = 0.0;
     };
     
     std::map<std::string, Position> positions_;
