@@ -73,6 +73,9 @@ public:
     
     // Export trade log to CSV
     bool exportTradeLogToCSV(const std::string& filepath) const;
+
+    // Export trade log to JSON
+    bool exportTradeLogToJSON(const std::string& filepath) const;
     
 private:
     // Event queue with custom comparator (priority queue)

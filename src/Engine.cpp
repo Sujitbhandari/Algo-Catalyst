@@ -525,6 +525,37 @@ bool Backtester::exportTradeLogToCSV(const std::string& filepath) const {
     return true;
 }
 
+bool Backtester::exportTradeLogToJSON(const std::string& filepath) const {
+    std::ofstream f(filepath);
+    if (!f.is_open()) {
+        std::cerr << "Error: Cannot create file " << filepath << "\n";
+        return false;
+    }
+
+    f << "[\n";
+    for (std::size_t i = 0; i < trade_log_.size(); ++i) {
+        const auto& t = trade_log_[i];
+        f << "  {\n"
+          << "    \"entry_time_us\": "  << t.entry_timestamp_us << ",\n"
+          << "    \"exit_time_us\": "   << t.exit_timestamp_us  << ",\n"
+          << "    \"symbol\": \""       << t.symbol             << "\",\n"
+          << "    \"entry_price\": "    << std::fixed << std::setprecision(4) << t.entry_price << ",\n"
+          << "    \"exit_price\": "     << t.exit_price         << ",\n"
+          << "    \"quantity\": "       << t.quantity           << ",\n"
+          << "    \"pnl\": "            << std::setprecision(4) << t.pnl << ",\n"
+          << "    \"commission\": "     << t.commission         << ",\n"
+          << "    \"regime\": \""       << t.regime             << "\",\n"
+          << "    \"strategy\": \""     << t.strategy_name      << "\",\n"
+          << "    \"mae\": "            << t.mae                << ",\n"
+          << "    \"mfe\": "            << t.mfe                << "\n"
+          << "  }" << (i + 1 < trade_log_.size() ? "," : "") << "\n";
+    }
+    f << "]\n";
+    f.close();
+    std::cout << "Exported " << trade_log_.size() << " trades to " << filepath << "\n";
+    return true;
+}
+
 // TickLoader Implementation
 std::vector<Tick> TickLoader::loadFromCSV(const std::string& filepath) {
     std::vector<Tick> ticks;
