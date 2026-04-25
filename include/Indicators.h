@@ -64,10 +64,48 @@ public:
     bool isStochasticOversold(double threshold = 20.0) const;
     bool isStochasticOverbought(double threshold = 80.0) const;
 
+    // WMA (Weighted Moving Average)
+    void updateWMA(double price, std::size_t period);
+    double getWMA(std::size_t period) const;
+
+    // OBV (On-Balance Volume)
+    void updateOBV(double price, std::int64_t volume);
+    double getOBV() const;
+    double getOBVEMA(std::size_t period = 20) const;
+
+    // Williams %R
+    void updateWilliamsR(double high, double low, double close, std::size_t period = 14);
+    double getWilliamsR() const;
+    bool isWilliamsROversold(double threshold = -80.0) const;
+    bool isWilliamsROverbought(double threshold = -20.0) const;
+
+    // Donchian Channel (highest high / lowest low over N periods)
+    void updateDonchian(double high, double low, std::size_t period = 20);
+    double getDonchianUpper() const;
+    double getDonchianLower() const;
+    double getDonchianMid() const;
+    bool isPriceAboveDonchianUpper(double price) const;
+    bool isPriceBelowDonchianLower(double price) const;
+
+    // DEMA (Double Exponential Moving Average)
+    void updateDEMA(double price, std::size_t period);
+    double getDEMA(std::size_t period) const;
+
+    // CCI (Commodity Channel Index)
+    void updateCCI(double high, double low, double close, std::size_t period = 20);
+    double getCCI() const;
+    bool isCCIOverbought(double threshold = 100.0) const;
+    bool isCCIOversold(double threshold = -100.0) const;
+
+    // CMF (Chaikin Money Flow)
+    void updateCMF(double high, double low, double close,
+                   std::int64_t volume, std::size_t period = 20);
+    double getCMF() const;
+
     // Price metrics
     void updatePrice(double price);
     double getGapUpPercent() const;  // Percent change from open price
-    
+
     // Reset indicators for new symbol
     void reset();
     
@@ -118,6 +156,49 @@ private:
     std::deque<double> stoch_k_history_;
     double stoch_k_ = 50.0;
     double stoch_d_ = 50.0;
+
+    // WMA components: period -> (price window)
+    std::map<std::size_t, std::deque<double>> wma_windows_;
+
+    // OBV components
+    double obv_value_ = 0.0;
+    double obv_prev_price_ = 0.0;
+    bool obv_initialized_ = false;
+    std::deque<double> obv_history_;
+
+    // Williams %R components
+    std::deque<double> wr_highs_;
+    std::deque<double> wr_lows_;
+    double williams_r_ = -50.0;
+
+    // Donchian Channel components
+    std::deque<double> dc_highs_;
+    std::deque<double> dc_lows_;
+    double dc_upper_ = 0.0;
+    double dc_lower_ = 0.0;
+
+    // DEMA components: period -> (ema1, ema2, tick_count)
+    struct DEMAState {
+        double ema1;
+        double ema2;
+        double alpha;
+        std::size_t tick_count;
+    };
+    std::map<std::size_t, DEMAState> dema_states_;
+
+    // CCI components
+    std::deque<double> cci_highs_;
+    std::deque<double> cci_lows_;
+    std::deque<double> cci_closes_;
+    double cci_value_ = 0.0;
+
+    // CMF components
+    struct CMFBar {
+        double mfv;
+        std::int64_t volume;
+    };
+    std::deque<CMFBar> cmf_bars_;
+    double cmf_value_ = 0.0;
 
     // VWAP components
     double cumulative_price_volume_;

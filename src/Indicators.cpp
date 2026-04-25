@@ -330,6 +330,193 @@ bool Indicators::isStochasticOverbought(double threshold) const {
     return stoch_k_ > threshold && stoch_d_ > threshold;
 }
 
+// ── WMA ─────────────────────────────────────────────────────────────────────
+void Indicators::updateWMA(double price, std::size_t period) {
+    auto& window = wma_windows_[period];
+    window.push_back(price);
+    if (window.size() > period) window.pop_front();
+}
+
+double Indicators::getWMA(std::size_t period) const {
+    auto it = wma_windows_.find(period);
+    if (it == wma_windows_.end() || it->second.size() < period) return 0.0;
+
+    const auto& w = it->second;
+    double weighted_sum = 0.0;
+    double weight_total = 0.0;
+    std::size_t n = w.size();
+    for (std::size_t i = 0; i < n; ++i) {
+        double wt = static_cast<double>(i + 1);
+        weighted_sum += w[i] * wt;
+        weight_total += wt;
+    }
+    return weight_total > 0.0 ? weighted_sum / weight_total : 0.0;
+}
+
+// ── OBV ─────────────────────────────────────────────────────────────────────
+void Indicators::updateOBV(double price, std::int64_t volume) {
+    if (!obv_initialized_) {
+        obv_prev_price_ = price;
+        obv_initialized_ = true;
+        obv_history_.push_back(obv_value_);
+        return;
+    }
+
+    if (price > obv_prev_price_)       obv_value_ += volume;
+    else if (price < obv_prev_price_)  obv_value_ -= volume;
+
+    obv_prev_price_ = price;
+    obv_history_.push_back(obv_value_);
+    if (obv_history_.size() > 200) obv_history_.pop_front();
+}
+
+double Indicators::getOBV() const { return obv_value_; }
+
+double Indicators::getOBVEMA(std::size_t period) const {
+    if (obv_history_.size() < period) return obv_value_;
+    double ema = obv_history_.front();
+    double alpha = 2.0 / (period + 1.0);
+    for (double v : obv_history_) {
+        ema = alpha * v + (1.0 - alpha) * ema;
+    }
+    return ema;
+}
+
+// ── Williams %R ──────────────────────────────────────────────────────────────
+void Indicators::updateWilliamsR(double high, double low, double close, std::size_t period) {
+    wr_highs_.push_back(high);
+    wr_lows_.push_back(low);
+    if (wr_highs_.size() > period) wr_highs_.pop_front();
+    if (wr_lows_.size()  > period) wr_lows_.pop_front();
+
+    if (wr_highs_.size() < period) return;
+
+    double highest = *std::max_element(wr_highs_.begin(), wr_highs_.end());
+    double lowest  = *std::min_element(wr_lows_.begin(),  wr_lows_.end());
+
+    williams_r_ = (highest == lowest) ? -50.0 :
+                  -100.0 * (highest - close) / (highest - lowest);
+}
+
+double Indicators::getWilliamsR() const { return williams_r_; }
+
+bool Indicators::isWilliamsROversold(double threshold) const {
+    return williams_r_ <= threshold;
+}
+
+bool Indicators::isWilliamsROverbought(double threshold) const {
+    return williams_r_ >= threshold;
+}
+
+// ── Donchian Channel ─────────────────────────────────────────────────────────
+void Indicators::updateDonchian(double high, double low, std::size_t period) {
+    dc_highs_.push_back(high);
+    dc_lows_.push_back(low);
+    if (dc_highs_.size() > period) dc_highs_.pop_front();
+    if (dc_lows_.size()  > period) dc_lows_.pop_front();
+
+    if (dc_highs_.size() < period) return;
+
+    dc_upper_ = *std::max_element(dc_highs_.begin(), dc_highs_.end());
+    dc_lower_ = *std::min_element(dc_lows_.begin(),  dc_lows_.end());
+}
+
+double Indicators::getDonchianUpper() const { return dc_upper_; }
+double Indicators::getDonchianLower() const { return dc_lower_; }
+double Indicators::getDonchianMid()   const { return (dc_upper_ + dc_lower_) / 2.0; }
+
+bool Indicators::isPriceAboveDonchianUpper(double price) const {
+    return dc_upper_ > 0.0 && price > dc_upper_;
+}
+
+bool Indicators::isPriceBelowDonchianLower(double price) const {
+    return dc_lower_ > 0.0 && price < dc_lower_;
+}
+
+// ── DEMA ─────────────────────────────────────────────────────────────────────
+void Indicators::updateDEMA(double price, std::size_t period) {
+    auto it = dema_states_.find(period);
+    if (it == dema_states_.end()) {
+        DEMAState s;
+        s.ema1 = price;
+        s.ema2 = price;
+        s.alpha = 2.0 / (period + 1.0);
+        s.tick_count = 1;
+        dema_states_[period] = s;
+        return;
+    }
+
+    DEMAState& s = it->second;
+    s.tick_count++;
+
+    if (s.tick_count <= period) {
+        s.ema1 += (price - s.ema1) / s.tick_count;
+        s.ema2 += (s.ema1 - s.ema2) / s.tick_count;
+    } else {
+        s.ema1 = s.alpha * price + (1.0 - s.alpha) * s.ema1;
+        s.ema2 = s.alpha * s.ema1 + (1.0 - s.alpha) * s.ema2;
+    }
+}
+
+double Indicators::getDEMA(std::size_t period) const {
+    auto it = dema_states_.find(period);
+    if (it == dema_states_.end() || it->second.tick_count < period) return 0.0;
+    const DEMAState& s = it->second;
+    return 2.0 * s.ema1 - s.ema2;
+}
+
+// ── CCI ──────────────────────────────────────────────────────────────────────
+void Indicators::updateCCI(double high, double low, double close, std::size_t period) {
+    double typical = (high + low + close) / 3.0;
+
+    cci_highs_.push_back(high);
+    cci_lows_.push_back(low);
+    cci_closes_.push_back(typical);
+
+    if (cci_closes_.size() > period) {
+        cci_highs_.pop_front();
+        cci_lows_.pop_front();
+        cci_closes_.pop_front();
+    }
+
+    if (cci_closes_.size() < period) return;
+
+    double mean_tp = std::accumulate(cci_closes_.begin(), cci_closes_.end(), 0.0) / period;
+
+    double mean_dev = 0.0;
+    for (double tp : cci_closes_) mean_dev += std::abs(tp - mean_tp);
+    mean_dev /= period;
+
+    cci_value_ = (mean_dev == 0.0) ? 0.0 : (typical - mean_tp) / (0.015 * mean_dev);
+}
+
+double Indicators::getCCI() const { return cci_value_; }
+bool Indicators::isCCIOverbought(double threshold) const { return cci_value_ > threshold; }
+bool Indicators::isCCIOversold(double threshold)   const { return cci_value_ < threshold; }
+
+// ── CMF ──────────────────────────────────────────────────────────────────────
+void Indicators::updateCMF(double high, double low, double close,
+                            std::int64_t volume, std::size_t period) {
+    double range = high - low;
+    double mfm = (range == 0.0) ? 0.0 : ((close - low) - (high - close)) / range;
+    double mfv = mfm * volume;
+
+    cmf_bars_.push_back({mfv, volume});
+    if (cmf_bars_.size() > period) cmf_bars_.pop_front();
+
+    if (cmf_bars_.size() < period) return;
+
+    double sum_mfv = 0.0;
+    std::int64_t sum_vol = 0;
+    for (const auto& b : cmf_bars_) {
+        sum_mfv += b.mfv;
+        sum_vol += b.volume;
+    }
+    cmf_value_ = (sum_vol == 0) ? 0.0 : sum_mfv / sum_vol;
+}
+
+double Indicators::getCMF() const { return cmf_value_; }
+
 void Indicators::updateBollingerBands(double price, std::size_t period, double std_dev_mult) {
     bb_period_ = period;
     bb_std_dev_mult_ = std_dev_mult;
@@ -390,6 +577,25 @@ void Indicators::reset() {
     bb_upper_ = 0.0;
     bb_middle_ = 0.0;
     bb_lower_ = 0.0;
+    wma_windows_.clear();
+    obv_value_ = 0.0;
+    obv_prev_price_ = 0.0;
+    obv_initialized_ = false;
+    obv_history_.clear();
+    wr_highs_.clear();
+    wr_lows_.clear();
+    williams_r_ = -50.0;
+    dc_highs_.clear();
+    dc_lows_.clear();
+    dc_upper_ = 0.0;
+    dc_lower_ = 0.0;
+    dema_states_.clear();
+    cci_highs_.clear();
+    cci_lows_.clear();
+    cci_closes_.clear();
+    cci_value_ = 0.0;
+    cmf_bars_.clear();
+    cmf_value_ = 0.0;
     cumulative_price_volume_ = 0.0;
     cumulative_volume_ = 0;
     vwap_session_start_us_ = 0;
