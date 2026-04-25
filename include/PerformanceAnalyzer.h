@@ -43,6 +43,8 @@ public:
         double var_99           = 0.0;  // Value at Risk at 99% confidence
         double expectancy       = 0.0;  // (win_rate * avg_win) + (loss_rate * avg_loss)
         double recovery_factor  = 0.0;  // total_pnl / max_drawdown
+        double median_pnl       = 0.0;  // Median trade PnL
+        double pnl_std_dev      = 0.0;  // Standard deviation of trade PnL
     };
 
     static Metrics compute(const std::vector<TradeRecord>& trades) {
@@ -145,6 +147,16 @@ public:
         m.expectancy = (m.win_rate / 100.0) * m.avg_win + loss_rate * m.avg_loss;
         m.recovery_factor = m.max_drawdown > 0.0 ? m.total_pnl / m.max_drawdown : 0.0;
 
+        // Median PnL and standard deviation
+        std::vector<double> sorted_for_median = pnls;
+        std::sort(sorted_for_median.begin(), sorted_for_median.end());
+        if (n % 2 == 0) {
+            m.median_pnl = (sorted_for_median[n/2 - 1] + sorted_for_median[n/2]) / 2.0;
+        } else {
+            m.median_pnl = sorted_for_median[n/2];
+        }
+        m.pnl_std_dev = std_dev;
+
         return m;
     }
 
@@ -173,6 +185,8 @@ public:
         out << "  VaR 99%:         $" << m.var_99 << "\n";
         out << "  Expectancy:      $" << m.expectancy << "\n";
         out << "  Recovery Factor: " << m.recovery_factor << "\n";
+        out << "  Median PnL:      $" << m.median_pnl << "\n";
+        out << "  PnL Std Dev:     $" << m.pnl_std_dev << "\n";
         out << "╚════════════════════════════════════════╝\n";
     }
 };
