@@ -24,7 +24,7 @@ AlgoCatalyst.exe
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
-Makefile
+build/Makefile
 _deps/
 
 # ─── macOS ────────────────────────────────────────────────────────────────────
