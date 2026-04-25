@@ -38,6 +38,11 @@ public:
         double avg_hold_time_s  = 0.0;
         int    max_consec_wins  = 0;
         int    max_consec_losses= 0;
+        double var_95           = 0.0;  // Value at Risk at 95% confidence
+        double cvar_95          = 0.0;  // Conditional VaR (Expected Shortfall) at 95%
+        double var_99           = 0.0;  // Value at Risk at 99% confidence
+        double expectancy       = 0.0;  // (win_rate * avg_win) + (loss_rate * avg_loss)
+        double recovery_factor  = 0.0;  // total_pnl / max_drawdown
     };
 
     static Metrics compute(const std::vector<TradeRecord>& trades) {
@@ -113,6 +118,33 @@ public:
             else         { cur_l++; cur_w = 0; m.max_consec_losses = std::max(m.max_consec_losses, cur_l); }
         }
 
+        // VaR and CVaR (historical simulation)
+        std::vector<double> sorted_pnls = pnls;
+        std::sort(sorted_pnls.begin(), sorted_pnls.end());
+        std::size_t n = sorted_pnls.size();
+
+        auto var_at = [&](double conf) -> double {
+            std::size_t idx = static_cast<std::size_t>((1.0 - conf) * n);
+            if (idx >= n) idx = n - 1;
+            return -sorted_pnls[idx];
+        };
+        auto cvar_at = [&](double conf) -> double {
+            std::size_t cutoff = static_cast<std::size_t>((1.0 - conf) * n);
+            if (cutoff == 0) return -sorted_pnls[0];
+            double sum = 0.0;
+            for (std::size_t i = 0; i < cutoff; ++i) sum += sorted_pnls[i];
+            return -(sum / cutoff);
+        };
+
+        m.var_95  = var_at(0.95);
+        m.cvar_95 = cvar_at(0.95);
+        m.var_99  = var_at(0.99);
+
+        // Expectancy and recovery factor
+        double loss_rate = m.num_trades > 0 ? (1.0 - m.win_rate / 100.0) : 0.0;
+        m.expectancy = (m.win_rate / 100.0) * m.avg_win + loss_rate * m.avg_loss;
+        m.recovery_factor = m.max_drawdown > 0.0 ? m.total_pnl / m.max_drawdown : 0.0;
+
         return m;
     }
 
@@ -136,6 +168,11 @@ public:
         out << "  Avg Hold (s):    " << m.avg_hold_time_s << "\n";
         out << "  Max Consec Wins: " << m.max_consec_wins << "\n";
         out << "  Max Consec Loss: " << m.max_consec_losses << "\n";
+        out << "  VaR 95%:         $" << m.var_95 << "\n";
+        out << "  CVaR 95%:        $" << m.cvar_95 << "\n";
+        out << "  VaR 99%:         $" << m.var_99 << "\n";
+        out << "  Expectancy:      $" << m.expectancy << "\n";
+        out << "  Recovery Factor: " << m.recovery_factor << "\n";
         out << "╚════════════════════════════════════════╝\n";
     }
 };
