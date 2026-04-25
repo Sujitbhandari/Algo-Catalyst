@@ -42,6 +42,7 @@ set(TEST_SOURCES
     tests/main.cpp
     tests/test_indicators.cpp
     tests/test_performance.cpp
+    tests/test_config.cpp
     src/Indicators.cpp
     src/AI_Regime.cpp
 )
