@@ -92,6 +92,19 @@ private:
     int trades_total_ = 0;
     double avg_win_  = 0.0;
     double avg_loss_ = 0.0;
+
+    // Market hours filter (UTC seconds within a trading day)
+    // Default: NYSE regular session 13:30–20:00 UTC
+    std::int64_t session_open_utc_s_  = 13 * 3600 + 30 * 60;  // 09:30 ET = 13:30 UTC
+    std::int64_t session_close_utc_s_ = 20 * 3600;             // 16:00 ET = 20:00 UTC
+    bool use_market_hours_filter_     = true;
+
+    bool isMarketOpen(std::int64_t timestamp_us) const {
+        constexpr std::int64_t US_PER_DAY = 86400LL * 1'000'000LL;
+        std::int64_t second_of_day = (timestamp_us % US_PER_DAY) / 1'000'000LL;
+        return second_of_day >= session_open_utc_s_ &&
+               second_of_day <  session_close_utc_s_;
+    }
 };
 
 // Mean Reversion Strategy - trades Bollinger Band breakouts and RSI extremes

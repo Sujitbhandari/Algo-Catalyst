@@ -50,7 +50,9 @@ std::vector<EventPtr> NewsMomentumStrategy::processMarketUpdate(const MarketUpda
     }
     
     // Check entry conditions only if no position
-    if (!hasPosition() && checkEntryConditions(tick)) {
+    if (!hasPosition() &&
+        (!use_market_hours_filter_ || isMarketOpen(timestamp_us)) &&
+        checkEntryConditions(tick)) {
         double position_size = calculatePositionSize();
         
         if (position_size > 0.0) {
