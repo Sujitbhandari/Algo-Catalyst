@@ -43,12 +43,20 @@ jobs:
           python3 scripts/generate_data.py --scenario catalyst --ticks 5000
           ./build/AlgoCatalyst --data data/catalyst.csv --symbol TEST --output test_trades.csv
 
+      - name: Run unit tests
+        run: ./build/AlgoCatalystTests
+
+      - name: Export metrics to JSON
+        run: python3 scripts/export_metrics.py --trades test_trades.csv --output metrics.json --pretty
+
       - name: Upload trade log artifact
         uses: actions/upload-artifact@v4
         if: matrix.os == 'ubuntu-22.04' && matrix.build_type == 'Release'
         with:
           name: trades-csv
-          path: test_trades.csv
+          path: |
+            test_trades.csv
+            metrics.json
 
   # ─── Python linting ──────────────────────────────────────────────────────────
   python-lint:
