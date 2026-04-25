@@ -40,6 +40,9 @@ run: release data
 plot:
 	python3 scripts/plot_performance.py --trades trades.csv
 
+report:
+	python3 scripts/backtest_report.py --trades trades.csv --output report.html
+
 viz: run plot
 
 ## Optimization and analysis
