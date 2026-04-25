@@ -126,5 +126,40 @@ private:
     double entry_price_ = 0.0;
 };
 
+// Breakout Strategy - trades Donchian Channel breakouts confirmed by volume and CCI
+class BreakoutStrategy : public Strategy {
+public:
+    BreakoutStrategy(const std::string& symbol, RegimeClassifier* regime_classifier);
+
+    std::vector<EventPtr> processMarketUpdate(const MarketUpdateEvent& event) override;
+
+    void setDonchianPeriod(std::size_t period) { donchian_period_ = period; }
+    void setCCIPeriod(std::size_t period)       { cci_period_ = period; }
+    void setMinRelativeVolume(double vol)        { min_relative_volume_ = vol; }
+    void setBasePositionSize(double size)        { base_position_size_ = size; }
+    void setStopLossPercent(double pct)          { stop_loss_pct_ = pct; }
+    void setTakeProfitPercent(double pct)        { take_profit_pct_ = pct; }
+    void setTrailingStopPercent(double pct)      { trailing_stop_pct_ = pct; }
+
+private:
+    bool checkLongEntry(const Tick& tick);
+    bool checkShortEntry(const Tick& tick);
+    bool checkExitConditions(const Tick& tick);
+
+    RegimeClassifier* regime_classifier_;
+
+    std::size_t donchian_period_ = 20;
+    std::size_t cci_period_      = 20;
+    double min_relative_volume_  = 1.5;
+    double base_position_size_   = 100.0;
+    double stop_loss_pct_        = 1.5;
+    double take_profit_pct_      = 4.5;
+    double trailing_stop_pct_    = 2.0;
+
+    double entry_price_ = 0.0;
+    double highest_since_entry_ = 0.0;
+    bool   is_long_ = true;
+};
+
 } // namespace AlgoCatalyst
 

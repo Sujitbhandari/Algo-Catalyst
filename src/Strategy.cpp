@@ -324,3 +324,104 @@ bool MeanReversionStrategy::checkExitConditions(const Tick& tick) {
 
 } // namespace AlgoCatalyst
 
+namespace AlgoCatalyst {
+
+// ── Breakout Strategy ────────────────────────────────────────────────────────
+BreakoutStrategy::BreakoutStrategy(const std::string& symbol,
+                                   RegimeClassifier* regime_classifier)
+    : Strategy(symbol), regime_classifier_(regime_classifier) {}
+
+std::vector<EventPtr> BreakoutStrategy::processMarketUpdate(const MarketUpdateEvent& event) {
+    std::vector<EventPtr> signals;
+    const Tick& tick = event.getTick();
+    std::int64_t timestamp_us = event.getTimestamp();
+
+    if (regime_classifier_) regime_classifier_->updateAndClassify(tick);
+
+    indicators_.updatePrice(tick.price);
+    indicators_.updateDonchian(tick.price, tick.price, donchian_period_);
+    indicators_.updateCCI(tick.price, tick.price, tick.price, cci_period_);
+    indicators_.updateVolume(tick.volume, timestamp_us);
+    indicators_.updateOBV(tick.price, tick.volume);
+    indicators_.updateEMA(tick.price, 20);
+    indicators_.updateVWAP(tick.price, tick.volume, timestamp_us);
+
+    if (hasPosition()) {
+        if (checkExitConditions(tick)) {
+            signals.push_back(std::make_unique<SignalEvent>(
+                timestamp_us, symbol_, SignalEvent::Direction::EXIT,
+                std::abs(position_), tick.price));
+        }
+        return signals;
+    }
+
+    if (checkLongEntry(tick)) {
+        signals.push_back(std::make_unique<SignalEvent>(
+            timestamp_us, symbol_, SignalEvent::Direction::LONG,
+            base_position_size_, tick.price));
+        entry_price_ = tick.price;
+        highest_since_entry_ = tick.price;
+        is_long_ = true;
+    }
+
+    return signals;
+}
+
+bool BreakoutStrategy::checkLongEntry(const Tick& tick) {
+    if (indicators_.getDonchianUpper() <= 0.0) return false;
+
+    bool dc_breakout = indicators_.isPriceAboveDonchianUpper(tick.price);
+    bool cci_bullish = indicators_.getCCI() > 100.0;
+    bool vol_confirm = indicators_.getRelativeVolume() >= min_relative_volume_;
+    bool above_vwap  = indicators_.isPriceAboveVWAP(tick.price);
+
+    if (!regime_classifier_) return dc_breakout && cci_bullish && vol_confirm;
+
+    auto r = regime_classifier_->getCurrentRegime();
+    bool good_regime = (r == RegimeClassifier::Regime::TRENDING ||
+                        r == RegimeClassifier::Regime::CHOPPY);
+
+    return dc_breakout && cci_bullish && vol_confirm && above_vwap && good_regime;
+}
+
+bool BreakoutStrategy::checkShortEntry(const Tick& tick) {
+    if (indicators_.getDonchianLower() <= 0.0) return false;
+
+    bool dc_breakdown = indicators_.isPriceBelowDonchianLower(tick.price);
+    bool cci_bearish  = indicators_.getCCI() < -100.0;
+    bool vol_confirm  = indicators_.getRelativeVolume() >= min_relative_volume_;
+
+    return dc_breakdown && cci_bearish && vol_confirm;
+}
+
+bool BreakoutStrategy::checkExitConditions(const Tick& tick) {
+    if (tick.price > highest_since_entry_) highest_since_entry_ = tick.price;
+
+    if (entry_price_ > 0.0 && stop_loss_pct_ > 0.0) {
+        double ref = is_long_ ? entry_price_ : entry_price_;
+        double loss = is_long_
+            ? ((entry_price_ - tick.price) / entry_price_) * 100.0
+            : ((tick.price - entry_price_) / entry_price_) * 100.0;
+        if (loss >= stop_loss_pct_) return true;
+        (void)ref;
+    }
+
+    if (take_profit_pct_ > 0.0 && entry_price_ > 0.0) {
+        double gain = ((tick.price - entry_price_) / entry_price_) * 100.0;
+        if (is_long_ && gain >= take_profit_pct_) return true;
+    }
+
+    if (trailing_stop_pct_ > 0.0 && highest_since_entry_ > 0.0 && is_long_) {
+        double pullback = ((highest_since_entry_ - tick.price) / highest_since_entry_) * 100.0;
+        if (pullback >= trailing_stop_pct_) return true;
+    }
+
+    if (regime_classifier_ &&
+        regime_classifier_->getCurrentRegime() == RegimeClassifier::Regime::VOLATILE) {
+        return true;
+    }
+
+    return false;
+}
+
+} // namespace AlgoCatalyst
