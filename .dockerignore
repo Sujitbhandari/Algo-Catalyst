@@ -1,0 +1,30 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+*.dylib
+
+# Generated output files
+trades.csv
+*.trades.csv
+metrics.json
+optimization_results.csv
+sensitivity_heatmap.png
+performance_plot.png
+
+# Python environment and caches
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Generated data files (keep sample data in data/ but not generated ones)
+data/wf_*.csv
+data/opt_*.csv
+data/cmp_*.csv
+
+# macOS
+.DS_Store
