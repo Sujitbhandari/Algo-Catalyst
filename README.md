@@ -1,4 +1,4 @@
-# Algo-Catalyst
+# Algo-Catalyst  ![v1.4.0](https://img.shields.io/badge/version-1.4.0-blue) ![C++20](https://img.shields.io/badge/C%2B%2B-20-blue) ![Python](https://img.shields.io/badge/Python-3.10%2B-yellow)
 
 [![CI](https://github.com/sujitbhandari/Algo-Catalyst/actions/workflows/ci.yml/badge.svg)](https://github.com/sujitbhandari/Algo-Catalyst/actions)
 
@@ -60,6 +60,7 @@ python3 scripts/plot_performance.py --trades trades.csv
 --take-profit <pct>  take profit % (default: 6.0)
 --trailing <pct>     trailing stop % (default: 3.0)
 --slippage <bps>     slippage in basis points (default: 5)
+--dry-run            print resolved config and exit without running
 --help               show this message
 ```
 
@@ -95,13 +96,14 @@ Then run: `./build/AlgoCatalyst --config config.json`
 
 ## Indicators
 
-All implemented manually with no external libraries:
+All 18 implemented manually with no external libraries (see `docs/indicators.md`):
 
-- EMA (with SMA warm-up), WMA, DEMA
+- EMA (with SMA warm-up), WMA, DEMA, **TRIX**, **KAMA**
 - MACD (12/26/9)
 - RSI (Wilder smoothing)
 - Bollinger Bands
 - ATR
+- **ADX** (+DI / -DI for direction)
 - VWAP (resets each session automatically)
 - Stochastic Oscillator %K/%D
 - OBV (On-Balance Volume)
@@ -109,6 +111,8 @@ All implemented manually with no external libraries:
 - Donchian Channel
 - CCI (Commodity Channel Index)
 - CMF (Chaikin Money Flow)
+- **MFI** (Money Flow Index — volume-weighted RSI)
+- **Pivot Points** (R1–R3, S1–S3)
 
 ---
 
