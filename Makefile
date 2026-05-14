@@ -56,6 +56,18 @@ walk-forward:
 compare:
 	python3 scripts/compare_strategies.py --ticks $(TICKS)
 
+monte-carlo:
+	python3 scripts/monte_carlo.py --trades trades.csv --sims 1000
+
+sharpe-tearsheet:
+	python3 scripts/sharpe_tearsheet.py --trades trades.csv
+
+mae-mfe:
+	python3 scripts/plot_mae_mfe.py --trades trades.csv
+
+batch:
+	./scripts/batch_backtest.sh configs/*.json
+
 ## Code quality
 
 format:
