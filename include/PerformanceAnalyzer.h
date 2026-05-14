@@ -45,6 +45,8 @@ public:
         double recovery_factor  = 0.0;  // total_pnl / max_drawdown
         double median_pnl       = 0.0;  // Median trade PnL
         double pnl_std_dev      = 0.0;  // Standard deviation of trade PnL
+        double omega_ratio      = 0.0;  // Omega = gross_profit / gross_loss (above/below zero)
+        double ulcer_index      = 0.0;  // RMS of drawdown depth — penalises prolonged drawdowns
     };
 
     static Metrics compute(const std::vector<TradeRecord>& trades) {
@@ -157,6 +159,21 @@ public:
         }
         m.pnl_std_dev = std_dev;
 
+        // Omega ratio (gross profit above zero / gross loss below zero)
+        m.omega_ratio = m.gross_loss > 0.0 ? m.gross_profit / m.gross_loss : 0.0;
+
+        // Ulcer Index — RMS of percentage drawdown over the full curve
+        {
+            double eq2 = 0.0, pk2 = 0.0, sum_dd2 = 0.0;
+            for (double p : pnls) {
+                eq2 += p;
+                if (eq2 > pk2) pk2 = eq2;
+                double dd_pct = pk2 > 0.0 ? 100.0 * (pk2 - eq2) / pk2 : 0.0;
+                sum_dd2 += dd_pct * dd_pct;
+            }
+            m.ulcer_index = n > 0 ? std::sqrt(sum_dd2 / n) : 0.0;
+        }
+
         return m;
     }
 
@@ -187,6 +204,8 @@ public:
         out << "  Recovery Factor: " << m.recovery_factor << "\n";
         out << "  Median PnL:      $" << m.median_pnl << "\n";
         out << "  PnL Std Dev:     $" << m.pnl_std_dev << "\n";
+        out << "  Omega Ratio:     "  << m.omega_ratio << "\n";
+        out << "  Ulcer Index:     "  << m.ulcer_index << "%\n";
         out << "╚════════════════════════════════════════╝\n";
     }
 };
