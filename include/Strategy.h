@@ -137,6 +137,13 @@ private:
     double take_profit_pct_ = 3.0;
 
     double entry_price_ = 0.0;
+
+    // RSI divergence tracking (bullish divergence: price makes lower low, RSI makes higher low)
+    double prev_price_low_ = 0.0;
+    double prev_rsi_low_   = 100.0;
+    bool   check_divergence_ = true;
+
+    bool checkBullishDivergence(const Tick& tick);
 };
 
 // Breakout Strategy - trades Donchian Channel breakouts confirmed by volume and CCI

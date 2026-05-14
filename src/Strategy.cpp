@@ -307,10 +307,31 @@ bool MeanReversionStrategy::checkEntryConditions(const Tick& tick) {
         return false;
     }
 
-    bool rsi_oversold = indicators_.isOversold(rsi_period_, oversold_threshold_);
+    bool rsi_oversold     = indicators_.isOversold(rsi_period_, oversold_threshold_);
     bool below_lower_band = indicators_.isPriceBelowLowerBand();
 
-    return rsi_oversold && below_lower_band;
+    // Also allow entry on bullish RSI divergence even if not fully oversold
+    bool divergence = check_divergence_ && checkBullishDivergence(tick);
+
+    return (rsi_oversold && below_lower_band) || divergence;
+}
+
+bool MeanReversionStrategy::checkBullishDivergence(const Tick& tick) {
+    double rsi = indicators_.getRSI(rsi_period_);
+    // Price makes a new low but RSI makes a higher low → bullish divergence
+    if (prev_price_low_ > 0.0 && tick.price < prev_price_low_ && rsi > prev_rsi_low_) {
+        // Confirm with price below the middle Bollinger Band
+        if (tick.price < indicators_.getBollingerMiddle()) {
+            prev_price_low_ = tick.price;
+            prev_rsi_low_   = rsi;
+            return true;
+        }
+    }
+    if (tick.price < prev_price_low_ || prev_price_low_ == 0.0) {
+        prev_price_low_ = tick.price;
+        prev_rsi_low_   = rsi;
+    }
+    return false;
 }
 
 bool MeanReversionStrategy::checkExitConditions(const Tick& tick) {
