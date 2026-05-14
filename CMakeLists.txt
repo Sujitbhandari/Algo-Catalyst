@@ -43,8 +43,12 @@ set(TEST_SOURCES
     tests/test_indicators.cpp
     tests/test_performance.cpp
     tests/test_config.cpp
+    tests/test_regime.cpp
+    tests/test_engine.cpp
     src/Indicators.cpp
     src/AI_Regime.cpp
+    src/Engine.cpp
+    src/Strategy.cpp
 )
 
 add_executable(AlgoCatalystTests ${TEST_SOURCES})
