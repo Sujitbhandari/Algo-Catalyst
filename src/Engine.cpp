@@ -411,16 +411,19 @@ double Backtester::getSharpeRatio(double risk_free_rate) const {
         returns.push_back(trade.pnl);
     }
 
-    double mean = std::accumulate(returns.begin(), returns.end(), 0.0) / returns.size();
+    const std::size_t n = returns.size();
+    double mean = std::accumulate(returns.begin(), returns.end(), 0.0) / static_cast<double>(n);
     double variance = 0.0;
     for (double r : returns) {
         double diff = r - mean;
         variance += diff * diff;
     }
-    variance /= (returns.size() - 1);
+    // Use sample variance (n-1 denominator) guarded against single-element edge case
+    variance /= static_cast<double>(n > 1 ? n - 1 : 1);
     double std_dev = std::sqrt(variance);
 
-    if (std_dev == 0.0) return 0.0;
+    // Return 0 rather than NaN/Inf when all trades are identical
+    if (std_dev < 1e-12) return 0.0;
     return (mean - risk_free_rate) / std_dev;
 }
 
