@@ -33,6 +33,7 @@ int main(int argc, char* argv[]) {
     std::string output_file = "trades.csv";
     std::string json_output_file;
     std::string strategy_name = "momentum";
+    bool dry_run = false;
     std::string config_file;
     double latency_ms = 200.0;
     double stop_loss_pct = 2.0;
@@ -90,6 +91,8 @@ int main(int argc, char* argv[]) {
             strategy_name = argv[++i];
         } else if (std::strcmp(argv[i], "--json-output") == 0 && i + 1 < argc) {
             json_output_file = argv[++i];
+        } else if (std::strcmp(argv[i], "--dry-run") == 0) {
+            dry_run = true;
         } else {
             // Legacy positional argument support
             if (i == 1) csv_file = argv[i];
@@ -143,6 +146,21 @@ int main(int argc, char* argv[]) {
     }
 
     backtester.registerStrategy(symbol, std::move(strategy));
+
+    if (dry_run) {
+        std::cout << "\n[DRY RUN] Configuration summary:\n"
+                  << "  Data:          " << csv_file << "\n"
+                  << "  Symbol:        " << symbol << "\n"
+                  << "  Strategy:      " << strategy_name << "\n"
+                  << "  Latency (ms):  " << latency_ms << "\n"
+                  << "  Stop Loss:     " << stop_loss_pct << "%\n"
+                  << "  Take Profit:   " << take_profit_pct << "%\n"
+                  << "  Trailing Stop: " << trailing_stop_pct << "%\n"
+                  << "  Slippage:      " << slippage_bps << " bps\n"
+                  << "  Output:        " << output_file << "\n"
+                  << "\n[DRY RUN] Exiting without running backtest.\n";
+        return 0;
+    }
 
     std::cout << "\n";
     backtester.run();
