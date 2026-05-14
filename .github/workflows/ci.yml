@@ -58,6 +58,25 @@ jobs:
             test_trades.csv
             metrics.json
 
+  # ─── CTest unit tests ────────────────────────────────────────────────────────
+  unit-tests:
+    name: Unit Tests (ctest)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build
+
+      - name: Configure (Debug for better error messages)
+        run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build tests
+        run: cmake --build build --target AlgoCatalystTests
+
+      - name: Run tests via ctest
+        run: ctest --test-dir build --output-on-failure
+
   # ─── Python linting ──────────────────────────────────────────────────────────
   python-lint:
     name: Python Lint
