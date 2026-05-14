@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented here.
 
+## [1.4.0] — 2026-05-14
+
+### Added
+- Five new indicators: TRIX, ADX (+DI/-DI), MFI, KAMA, and Pivot Points (R1–R3, S1–S3)
+- Bullish RSI divergence detection in `MeanReversionStrategy`
+- Consecutive-loss circuit breaker (`setMaxConsecLosses`)
+- Commission-free mode (`setCommissionFree`)
+- `--dry-run` CLI flag for config verification without executing
+- `scripts/monte_carlo.py` — bootstrap equity curve simulation with ruin probability
+- `scripts/sharpe_tearsheet.py` — rolling Sharpe + rolling win-rate three-panel chart
+- `scripts/plot_mae_mfe.py` — MAE/MFE scatter plot with MFE capture ratio
+- `scripts/batch_backtest.sh` — run multiple config files and collect summary CSV
+- `configs/` preset directory: `aggressive.json`, `conservative.json`, `breakout.json`, `meanrev.json`
+- `docs/indicators.md` — full formula reference for all 18 indicators
+- `docs/strategies.md` — entry/exit logic and position sizing for all three strategies
+- GitHub issue templates for bug reports and feature requests
+- `tests/test_regime.cpp` — 5 regime classifier unit tests
+- `tests/test_engine.cpp` — 10 backtester and tick-loader unit tests
+- Dedicated `unit-tests` CI job using ctest on ubuntu-22.04
+
+### Fixed
+- `getSharpeRatio` — guarded against NaN/Inf with epsilon check and sample-variance floor
+
+### Changed
+- CMakeLists: version bumped to 1.4.0; Engine.cpp and Strategy.cpp added to test build
+- Makefile: added `monte-carlo`, `sharpe-tearsheet`, `mae-mfe`, `batch` targets
+
 ## [1.3.0] — 2026-04-24
 
 ### Added
