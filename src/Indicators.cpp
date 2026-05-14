@@ -596,6 +596,18 @@ void Indicators::reset() {
     cci_value_ = 0.0;
     cmf_bars_.clear();
     cmf_value_ = 0.0;
+    trix_states_.clear();
+    trix_value_ = 0.0;
+    adx_state_ = ADXState{};
+    adx_value_ = plus_di_ = minus_di_ = 0.0;
+    mfi_bars_.clear();
+    mfi_prev_typical_ = 0.0;
+    mfi_value_ = 50.0;
+    kama_value_ = 0.0;
+    kama_initialized_ = false;
+    kama_prices_.clear();
+    pivot_ = pivot_r1_ = pivot_r2_ = pivot_r3_ = 0.0;
+    pivot_s1_ = pivot_s2_ = pivot_s3_ = 0.0;
     cumulative_price_volume_ = 0.0;
     cumulative_volume_ = 0;
     vwap_session_start_us_ = 0;
@@ -605,6 +617,163 @@ void Indicators::reset() {
     open_price_ = 0.0;
     is_first_tick_ = true;
 }
+
+// ── TRIX ─────────────────────────────────────────────────────────────────────
+void Indicators::updateTRIX(double price, std::size_t period) {
+    auto it = trix_states_.find(period);
+    if (it == trix_states_.end()) {
+        TRIXState s;
+        s.ema1 = s.ema2 = s.ema3 = price;
+        s.alpha = 2.0 / (period + 1.0);
+        s.prev_ema3 = price;
+        s.tick_count = 1;
+        trix_states_[period] = s;
+        return;
+    }
+    TRIXState& s = it->second;
+    s.tick_count++;
+    if (s.tick_count <= period) {
+        s.ema1 += (price   - s.ema1) / s.tick_count;
+        s.ema2 += (s.ema1  - s.ema2) / s.tick_count;
+        s.ema3 += (s.ema2  - s.ema3) / s.tick_count;
+    } else {
+        s.ema1 = s.alpha * price  + (1.0 - s.alpha) * s.ema1;
+        s.ema2 = s.alpha * s.ema1 + (1.0 - s.alpha) * s.ema2;
+        s.ema3 = s.alpha * s.ema2 + (1.0 - s.alpha) * s.ema3;
+    }
+    trix_value_ = s.prev_ema3 != 0.0 ?
+        (s.ema3 - s.prev_ema3) / s.prev_ema3 * 100.0 : 0.0;
+    s.prev_ema3 = s.ema3;
+}
+
+double Indicators::getTRIX() const { return trix_value_; }
+bool   Indicators::isTRIXBullish() const { return trix_value_ > 0.0; }
+
+// ── ADX ──────────────────────────────────────────────────────────────────────
+void Indicators::updateADX(double high, double low, double close, std::size_t period) {
+    ADXState& s = adx_state_;
+    s.tick_count++;
+
+    if (s.tick_count == 1) {
+        s.prev_high = high; s.prev_low = low; s.prev_close = close;
+        return;
+    }
+
+    double tr = std::max({high - low,
+                          std::abs(high - s.prev_close),
+                          std::abs(low  - s.prev_close)});
+
+    double plus_dm  = (high - s.prev_high > s.prev_low - low  &&
+                       high - s.prev_high > 0) ? high - s.prev_high : 0.0;
+    double minus_dm = (s.prev_low - low > high - s.prev_high &&
+                       s.prev_low - low  > 0) ? s.prev_low - low  : 0.0;
+
+    double alpha = 1.0 / period;
+    if (s.tick_count <= period + 1) {
+        s.atr_smooth      += (tr       - s.atr_smooth)      / s.tick_count;
+        s.plus_dm_smooth  += (plus_dm  - s.plus_dm_smooth)  / s.tick_count;
+        s.minus_dm_smooth += (minus_dm - s.minus_dm_smooth) / s.tick_count;
+    } else {
+        s.atr_smooth      = (s.atr_smooth      * (period - 1) + tr)       / period;
+        s.plus_dm_smooth  = (s.plus_dm_smooth  * (period - 1) + plus_dm)  / period;
+        s.minus_dm_smooth = (s.minus_dm_smooth * (period - 1) + minus_dm) / period;
+    }
+
+    plus_di_  = s.atr_smooth > 0.0 ? 100.0 * s.plus_dm_smooth  / s.atr_smooth : 0.0;
+    minus_di_ = s.atr_smooth > 0.0 ? 100.0 * s.minus_dm_smooth / s.atr_smooth : 0.0;
+
+    double di_sum  = plus_di_ + minus_di_;
+    double dx      = di_sum > 0.0 ? 100.0 * std::abs(plus_di_ - minus_di_) / di_sum : 0.0;
+
+    if (s.tick_count <= 2 * period) {
+        s.adx_smooth += (dx - s.adx_smooth) / (s.tick_count - 1);
+    } else {
+        s.adx_smooth = (s.adx_smooth * (period - 1) + dx) / period;
+    }
+    adx_value_ = s.adx_smooth;
+
+    s.prev_high = high; s.prev_low = low; s.prev_close = close;
+    (void)alpha;
+}
+
+double Indicators::getADX()     const { return adx_value_; }
+double Indicators::getPlusDI()  const { return plus_di_; }
+double Indicators::getMinusDI() const { return minus_di_; }
+bool   Indicators::isTrending(double threshold) const { return adx_value_ > threshold; }
+
+// ── MFI ──────────────────────────────────────────────────────────────────────
+void Indicators::updateMFI(double high, double low, double close,
+                            std::int64_t volume, std::size_t period) {
+    double tp = (high + low + close) / 3.0;
+    double raw = tp * volume;
+
+    if (mfi_prev_typical_ > 0.0) {
+        mfi_bars_.push_back({tp, tp >= mfi_prev_typical_ ? raw : -raw});
+    }
+    mfi_prev_typical_ = tp;
+
+    if (mfi_bars_.size() > period) mfi_bars_.pop_front();
+    if (mfi_bars_.size() < period) return;
+
+    double pos_mf = 0.0, neg_mf = 0.0;
+    for (const auto& b : mfi_bars_) {
+        if (b.raw_mf >= 0.0) pos_mf += b.raw_mf;
+        else                  neg_mf += std::abs(b.raw_mf);
+    }
+    mfi_value_ = neg_mf == 0.0 ? 100.0 : 100.0 - 100.0 / (1.0 + pos_mf / neg_mf);
+}
+
+double Indicators::getMFI() const { return mfi_value_; }
+bool   Indicators::isMFIOversold(double t)  const { return mfi_value_ < t; }
+bool   Indicators::isMFIOverbought(double t) const { return mfi_value_ > t; }
+
+// ── KAMA ─────────────────────────────────────────────────────────────────────
+void Indicators::updateKAMA(double price, std::size_t er_period,
+                             double fast_sc, double slow_sc) {
+    kama_prices_.push_back(price);
+    if (kama_prices_.size() > er_period + 1) kama_prices_.pop_front();
+
+    if (!kama_initialized_) {
+        kama_value_ = price;
+        kama_initialized_ = true;
+        return;
+    }
+
+    if (kama_prices_.size() < er_period + 1) {
+        kama_value_ = kama_value_ + fast_sc * fast_sc * (price - kama_value_);
+        return;
+    }
+
+    double direction = std::abs(price - kama_prices_.front());
+    double volatility = 0.0;
+    for (std::size_t i = 1; i < kama_prices_.size(); ++i)
+        volatility += std::abs(kama_prices_[i] - kama_prices_[i - 1]);
+
+    double er = (volatility == 0.0) ? 0.0 : direction / volatility;
+    double sc = std::pow(er * (fast_sc - slow_sc) + slow_sc, 2.0);
+    kama_value_ += sc * (price - kama_value_);
+}
+
+double Indicators::getKAMA() const { return kama_value_; }
+
+// ── Pivot Points ──────────────────────────────────────────────────────────────
+void Indicators::updatePivotPoints(double prev_high, double prev_low, double prev_close) {
+    pivot_   = (prev_high + prev_low + prev_close) / 3.0;
+    pivot_r1_ = 2.0 * pivot_ - prev_low;
+    pivot_r2_ = pivot_ + (prev_high - prev_low);
+    pivot_r3_ = prev_high + 2.0 * (pivot_ - prev_low);
+    pivot_s1_ = 2.0 * pivot_ - prev_high;
+    pivot_s2_ = pivot_ - (prev_high - prev_low);
+    pivot_s3_ = prev_low - 2.0 * (prev_high - pivot_);
+}
+
+double Indicators::getPivotPoint() const { return pivot_; }
+double Indicators::getR1() const { return pivot_r1_; }
+double Indicators::getR2() const { return pivot_r2_; }
+double Indicators::getR3() const { return pivot_r3_; }
+double Indicators::getS1() const { return pivot_s1_; }
+double Indicators::getS2() const { return pivot_s2_; }
+double Indicators::getS3() const { return pivot_s3_; }
 
 } // namespace AlgoCatalyst
 

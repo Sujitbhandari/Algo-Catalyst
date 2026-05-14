@@ -102,6 +102,40 @@ public:
                    std::int64_t volume, std::size_t period = 20);
     double getCMF() const;
 
+    // TRIX (Triple Exponential Average – rate of change of triple-smoothed EMA)
+    void updateTRIX(double price, std::size_t period = 15);
+    double getTRIX() const;
+    bool isTRIXBullish() const;  // TRIX > 0 and rising
+
+    // ADX (Average Directional Index) – trend strength 0–100
+    void updateADX(double high, double low, double close, std::size_t period = 14);
+    double getADX() const;
+    double getPlusDI() const;
+    double getMinusDI() const;
+    bool isTrending(double threshold = 25.0) const;  // ADX > threshold
+
+    // MFI (Money Flow Index) – volume-weighted RSI
+    void updateMFI(double high, double low, double close,
+                   std::int64_t volume, std::size_t period = 14);
+    double getMFI() const;
+    bool isMFIOversold(double threshold = 20.0) const;
+    bool isMFIOverbought(double threshold = 80.0) const;
+
+    // KAMA (Kaufman Adaptive Moving Average)
+    void updateKAMA(double price, std::size_t er_period = 10,
+                    double fast_sc = 2.0 / 3.0, double slow_sc = 2.0 / 31.0);
+    double getKAMA() const;
+
+    // Pivot Points (classic floor trader: based on prev H/L/C)
+    void updatePivotPoints(double prev_high, double prev_low, double prev_close);
+    double getPivotPoint() const;
+    double getR1() const;
+    double getR2() const;
+    double getR3() const;
+    double getS1() const;
+    double getS2() const;
+    double getS3() const;
+
     // Price metrics
     void updatePrice(double price);
     double getGapUpPercent() const;  // Percent change from open price
@@ -199,6 +233,50 @@ private:
     };
     std::deque<CMFBar> cmf_bars_;
     double cmf_value_ = 0.0;
+
+    // TRIX components: period -> triple EMA states
+    struct TRIXState {
+        double ema1, ema2, ema3;
+        double alpha;
+        double prev_ema3;
+        std::size_t tick_count;
+    };
+    std::map<std::size_t, TRIXState> trix_states_;
+    double trix_value_ = 0.0;
+
+    // ADX components
+    struct ADXState {
+        double prev_high = 0.0, prev_low = 0.0, prev_close = 0.0;
+        double atr_smooth = 0.0;
+        double plus_dm_smooth = 0.0;
+        double minus_dm_smooth = 0.0;
+        double adx_smooth = 0.0;
+        double prev_dx = 0.0;
+        std::size_t tick_count = 0;
+    };
+    ADXState adx_state_;
+    double adx_value_    = 0.0;
+    double plus_di_      = 0.0;
+    double minus_di_     = 0.0;
+
+    // MFI components
+    struct MFIBar {
+        double typical_price;
+        double raw_mf;   // positive = up-day, negative = down-day
+    };
+    std::deque<MFIBar> mfi_bars_;
+    double mfi_prev_typical_ = 0.0;
+    double mfi_value_        = 50.0;
+
+    // KAMA components
+    double kama_value_          = 0.0;
+    bool   kama_initialized_    = false;
+    std::deque<double> kama_prices_;
+
+    // Pivot Points
+    double pivot_  = 0.0;
+    double pivot_r1_ = 0.0, pivot_r2_ = 0.0, pivot_r3_ = 0.0;
+    double pivot_s1_ = 0.0, pivot_s2_ = 0.0, pivot_s3_ = 0.0;
 
     // VWAP components
     double cumulative_price_volume_;
