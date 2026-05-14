@@ -208,9 +208,10 @@ void Backtester::processOrderEvent(std::unique_ptr<OrderEvent> event) {
         fill_price *= (1.0 - slippage_factor);
     }
     
-    // Per-share commission with minimum
+    // Per-share commission with minimum (zero if commission-free mode)
     double quantity = event->getQuantity();
-    double commission = std::max(quantity * commission_per_share_, min_commission_);
+    double commission = commission_free_ ? 0.0 :
+        std::max(quantity * commission_per_share_, min_commission_);
     
     // Create fill event
     auto fill_event = std::make_unique<FillEvent>(
@@ -336,6 +337,18 @@ void Backtester::closePosition(const std::string& symbol, double exit_price, std
         std::cerr << "[RISK] Daily loss limit $" << max_daily_loss_
                   << " reached — halting new entries.\n";
         risk_halt_ = true;
+    }
+
+    // Consecutive loss circuit breaker
+    if (trade.pnl < 0.0) {
+        current_consec_losses_++;
+        if (max_consec_losses_ > 0 && current_consec_losses_ >= max_consec_losses_) {
+            std::cerr << "[RISK] " << current_consec_losses_
+                      << " consecutive losses — halting new entries.\n";
+            risk_halt_ = true;
+        }
+    } else {
+        current_consec_losses_ = 0;
     }
 
     position.quantity = 0.0;

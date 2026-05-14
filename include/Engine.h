@@ -41,9 +41,12 @@ public:
     void setMinCommission(double min_comm) { min_commission_ = min_comm; }
     
     // Risk management
-    void setMaxDrawdownLimit(double max_dd) { max_drawdown_limit_ = max_dd; }
-    void setMaxDailyLoss(double max_loss)   { max_daily_loss_ = max_loss; }
-    bool isHaltedByRisk() const             { return risk_halt_; }
+    void setMaxDrawdownLimit(double max_dd)       { max_drawdown_limit_ = max_dd; }
+    void setMaxDailyLoss(double max_loss)         { max_daily_loss_ = max_loss; }
+    void setMaxConsecLosses(int n)                { max_consec_losses_ = n; }
+    void setMaxPositionsPerSymbol(int n)          { max_positions_per_symbol_ = n; }
+    void setCommissionFree(bool free)             { commission_free_ = free; }
+    bool isHaltedByRisk() const                   { return risk_halt_; }
     
     // Load tick data from CSV
     bool loadTickData(const std::string& csv_path, const std::string& symbol);
@@ -126,9 +129,13 @@ private:
     double slippage_bps_ = 5.0;
     double commission_per_share_ = 0.005;
     double min_commission_ = 1.0;
-    double max_drawdown_limit_ = -1.0;  // -1 = disabled
-    double max_daily_loss_ = -1.0;      // -1 = disabled
-    bool risk_halt_ = false;
+    double max_drawdown_limit_   = -1.0;  // -1 = disabled
+    double max_daily_loss_       = -1.0;  // -1 = disabled
+    int    max_consec_losses_    = -1;    // -1 = disabled
+    int    max_positions_per_symbol_ = 1;
+    bool   commission_free_      = false;
+    bool   risk_halt_            = false;
+    int    current_consec_losses_ = 0;
     double peak_equity_ = 0.0;
     double daily_pnl_ = 0.0;
     std::int64_t current_time_us_;
