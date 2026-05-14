@@ -80,6 +80,9 @@ regime-breakdown:
 calendar:
 	python3 scripts/pnl_calendar.py --trades trades.csv
 
+correlation:
+	python3 scripts/correlation_analysis.py
+
 ## Code quality
 
 format:
