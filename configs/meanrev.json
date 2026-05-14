@@ -1,0 +1,14 @@
+{
+    "data": "data/tick_data.csv",
+    "symbol": "AAPL",
+    "strategy": "meanrev",
+    "latency_ms": 200,
+    "stop_loss_pct": 1.5,
+    "take_profit_pct": 3.0,
+    "trailing_stop_pct": 2.0,
+    "slippage_bps": 5,
+    "base_position_size": 100.0,
+    "regime_lookback": 100,
+    "max_drawdown_limit": -1,
+    "max_daily_loss": -1
+}

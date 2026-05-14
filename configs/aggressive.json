@@ -1,0 +1,17 @@
+{
+    "data": "data/tick_data.csv",
+    "symbol": "AAPL",
+    "strategy": "momentum",
+    "latency_ms": 100,
+    "stop_loss_pct": 3.0,
+    "take_profit_pct": 9.0,
+    "trailing_stop_pct": 4.0,
+    "slippage_bps": 3,
+    "min_relative_volume": 4.0,
+    "min_gap_up_pct": 8.0,
+    "min_bid_ask_ratio": 1.2,
+    "base_position_size": 200.0,
+    "regime_lookback": 80,
+    "max_drawdown_limit": -1,
+    "max_daily_loss": -1
+}
