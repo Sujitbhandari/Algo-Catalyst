@@ -53,3 +53,15 @@ test_trades.csv
 *.log
 logs/
 
+# ─── Generated analysis outputs ───────────────────────────────────────────────
+monte_carlo.png
+mae_mfe.png
+sharpe_tearsheet.png
+regime_breakdown.png
+streaks.png
+duration_analysis.png
+pnl_calendar.png
+batch_results.csv
+report.html
+optimization_results.csv
+
