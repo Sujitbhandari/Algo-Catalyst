@@ -68,6 +68,18 @@ mae-mfe:
 batch:
 	./scripts/batch_backtest.sh configs/*.json
 
+streaks:
+	python3 scripts/streaks.py --trades trades.csv
+
+duration:
+	python3 scripts/duration_analysis.py --trades trades.csv
+
+regime-breakdown:
+	python3 scripts/regime_breakdown.py --trades trades.csv
+
+calendar:
+	python3 scripts/pnl_calendar.py --trades trades.csv
+
 ## Code quality
 
 format:
